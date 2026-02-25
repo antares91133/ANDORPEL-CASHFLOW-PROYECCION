@@ -122,6 +122,9 @@ main{padding:20px 28px 40px;}
 /* Scenario legend */
 .sc-legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
 .sc-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2);}
+body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:0;z-index:10000;
+  display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;
+  color:var(--pri);background:rgba(255,255,255,.92);border:4px dashed var(--pri);pointer-events:none;}
 .sc-dot{width:10px;height:3px;border-radius:2px;}
 
 /* Loading / Upload */
@@ -152,7 +155,7 @@ main{padding:20px 28px 40px;}
       <div class="brand-sep"></div>
       <div>
         <div class="brand-title">DASHBOARD PROYECCIÓN CASHFLOW</div>
-        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Pulsar «Refrescar fuentes de OneDrive» para actualizar</div>
+        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Pulsar «Refrescar fuentes de OneDrive» o arrastrar .xlsx para actualizar</div>
       </div>
     </div>
   </div>
@@ -407,7 +410,9 @@ function parseWorkbook(wb) {
   // Helper: get cell value
   function gv(r,c){const a=XLSX.utils.encode_cell({r:r-1,c:c-1});const cell=ws[a];
     if(!cell)return null;return cell.v;}
-  function gvn(r,c){const v=gv(r,c);return(v!=null&&!isNaN(+v))?+v:0;}
+  function gvn(r,c){const v=gv(r,c);if(v==null)return 0;
+    if(v instanceof Date)return 0;if(typeof v==='object')return 0;
+    const n=+v;return(!isNaN(n)&&Math.abs(n)<1e11)?n:0;}
   function gvd(r,c){const a=XLSX.utils.encode_cell({r:r-1,c:c-1});const cell=ws[a];
     if(!cell||!cell.v)return'';const d=cell.v;
     if(d instanceof Date)return d.toISOString().split('T')[0];
@@ -568,7 +573,7 @@ function parseWorkbook(wb) {
     if(d.includes('NATURGY')||b.includes('GAS'))return'Servicios (Gas)';
     if(d.includes('TSG')||b.includes('MUNI'))return'Tasas Municipales';
     if(d.includes('VALENTINA'))return'Valentina (Personal)';
-    if(['SAIZ CAPUTO','ROLANPLAST','MIGUEL','CORRUGADO','3 PACK','ARTEPLAST','NARDONE'].some(x=>d.includes(x)))return'Proveedores';
+    if(['SAIZ CAPUTO','ROLANPLAST','MIGUEL','CORRUGADO','3 PACK','ARTEPLAST','NARDONE','EMBAL GROUP','EMBAL'].some(x=>d.includes(x)))return'Proveedores';
     if(b.includes('PREVISIÓN')||b.includes('PREVISION'))return'Proveedores';
     if(d.includes('VIS')||d.includes('VISA')){return d.includes('USD')||d.includes('US ')?'Tarjetas USD':'Tarjetas ARS';}
     if(d.includes('MC')||d.includes('MASTER')||d.includes('MAS ')){return d.includes('USD')?'Tarjetas USD':'Tarjetas ARS';}
@@ -577,7 +582,7 @@ function parseWorkbook(wb) {
 
   // Parse payment item rows (triplets: amount, description, bank)
   const ppItems=[];
-  const ppParseRanges=[[71,101],[110,113],[116,130]];
+  const ppParseRanges=[[71,101],[110,112],[116,130]];
   for(const [startR,endR] of ppParseRanges){
     let r=startR;
     while(r<=endR){
@@ -614,15 +619,6 @@ function parseWorkbook(wb) {
   data.ppItems=ppItems;
 
   // Total egresos per week
-  data.totalEgresos = dateCols.map((_,i)=>{
-    let s=data.pagosEfectivo[i]||0;
-    for(const vals of Object.values(data.expenses)){s+=(vals[i]||0);}
-    // Subtract pagosEfectivo once since it's already in expenses
-    s -= (data.pagosEfectivo[i]||0);
-    // Recalculate properly
-    return 0;
-  });
-  // Proper calculation
   data.totalEgresos = dateCols.map((_,i)=>{
     let s=0;
     for(const [name,vals] of Object.entries(data.expenses)){s+=(vals[i]||0);}
@@ -1038,37 +1034,45 @@ async function fetchOneDrive(){
   showLoading('Conectando a OneDrive…');
 
   try{
-    // Method 1: Microsoft Graph shares API
     const token=encodeShareUrl(ONEDRIVE_SHARE_URL);
     const apiUrl=`https://api.onedrive.com/v1.0/shares/${token}/root/content`;
-
     let resp=await fetch(apiUrl,{redirect:'follow'}).catch(()=>null);
 
     if(!resp||!resp.ok){
-      // Method 2: Try direct download URL pattern
       const dlUrl='https://onedrive.live.com/download?resid=B796724014EC33B5!109185';
       resp=await fetch(dlUrl,{redirect:'follow'}).catch(()=>null);
     }
 
-    if(!resp||!resp.ok){
-      throw new Error('CORS bloqueado. Usá el botón "Cargar .xlsx" para subir el archivo manualmente.');
-    }
+    if(!resp||!resp.ok) throw new Error('CORS');
 
     const ab=await resp.arrayBuffer();
-    if(ab.byteLength<500)throw new Error('Archivo vacío o respuesta inválida');
+    if(ab.byteLength<500)throw new Error('empty');
     await processFile(ab);
-    setODStatus('ok','OneDrive ✓');
+    setODStatus('ok','OneDrive \u2713');
   }catch(e){
     console.warn('OneDrive:',e.message);
-    setODStatus('err','Manual requerido');
     hideLoading();
-    // Show helpful message
-    const msg=`No se pudo conectar automáticamente a OneDrive (restricción CORS del navegador).\n\nUsá el botón "Cargar .xlsx" para actualizar manualmente.\n\n💡 Tip: Para auto-refresh, abrí el HTML desde un servidor local (Live Server de VS Code).`;
-    if(!D) alert(msg); // Only alert if no data loaded yet
+    setODStatus('err','Seleccionar archivo');
+    setStatus('warn','Seleccioná el .xlsx actualizado');
+    document.getElementById('fi').click();
   }finally{
     btn.classList.remove('act');
   }
 }
+
+// ===================== DRAG & DROP =====================
+document.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();
+  document.body.classList.add('drag-over');});
+document.addEventListener('dragleave',e=>{e.preventDefault();e.stopPropagation();
+  if(!e.relatedTarget||e.relatedTarget===document.documentElement)document.body.classList.remove('drag-over');});
+document.addEventListener('drop',async e=>{e.preventDefault();e.stopPropagation();
+  document.body.classList.remove('drag-over');
+  const f=e.dataTransfer.files[0];
+  if(f&&(f.name.endsWith('.xlsx')||f.name.endsWith('.xls'))){
+    const ab=await f.arrayBuffer();await processFile(ab);
+  }else if(f){alert('Solo se aceptan archivos .xlsx o .xls');}
+});
+
 
 // ===================== UI HELPERS =====================
 function showLoading(t){document.getElementById('ovTxt').textContent=t||'Procesando…';
@@ -1130,18 +1134,18 @@ document.querySelectorAll('.tab').forEach(tab=>{
     modeloVals:[-2215032.07,-3982972.85,-5608449.11,-7091460.83,-8432008.03,-9630090.7,-10685708.84,-11598862.46,-12369551.54,-12997776.09,-13483536.12,-13826831.62,-14027662.58,-14086029.02,-14001930.93,-13775368.32,-13406341.17,-12894849.49,-12240893.29,-11444472.55,-10505587.29,-9424237.5],
     scenarios:{},
     ppCatByWeek:{
-      "Proveedores":[693500,0,0,0,0,0,3204966.43,722998.08,1852184.89,0,0,0,0,1500000,0,0,0,0,0,652538.43,0,0],
-      "Alquiler Vivienda":[837203.83,0,0,0,0,837203.83,0,0,0,0,837203.83,0,0,837203.83,0,0,906740.31,0,0,0,0,0],
-      "Valentina (Personal)":[0,661617,0,0,0,0,0,678157.42,0,0,0,695111.36,0,0,0,712489.14,0,0,0,730301.37,0,0],
-      "Tarjetas ARS":[203635.27,1326015.76,0,0,0,152703.12,35057.42,0,0,0,152703,35057.42,0,93217.74,35057.42,0,77652,35057.42,0,128274.97,35057.42,0],
-      "Expensas":[0,0,270820.26,0,0,0,270820.26,0,0,0,270820.26,0,0,270820.26,0,0,0,270820.26,0,0,270820.26,0],
-      "Servicios (Electricidad)":[0,0,0,0,156541.4,0,0,0,156541.4,0,0,0,156541.4,0,0,156541.4,0,0,0,0,0,156541.4],
-      "Tarjetas USD":[28738.5,220926.3,0,0,0,0,0,12127.5,0,0,0,0,0,0,0,0,0,0,0,0,4454.1,0],
-      "Servicios (TV/Internet)":[42519.28,0,0,0,0,42519.28,0,0,0,0,42519.28,0,0,42519.28,0,0,42519.28,0,0,0,0,42519.28],
-      "Tasas Municipales":[0,0,40202,0,0,0,40202,0,0,0,40202,0,0,40202,0,0,0,0,40202,0,0,40202],
-      "Servicios (Gas)":[0,0,0,0,10036.73,0,0,0,10036.73,0,0,0,10036.73,0,0,10036.73,0,0,0,0,0,10036.73]
+      "Proveedores":[693500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2427328.43, 1422998.08, 1852184.89, 0.0, 0.0, 0.0, 0.0, 1500000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "Alquiler Vivienda":[837203.83, 0.0, 0.0, 0.0, 0.0, 837203.83, 0.0, 0.0, 0.0, 837203.83, 0.0, 0.0, 0.0, 837203.83, 0.0, 0.0, 0.0, 906740.31, 0.0, 0.0, 0.0, 0.0],
+      "Valentina (Personal)":[0.0, 661617.0, 0.0, 0.0, 0.0, 0.0, 678157.42, 0.0, 0.0, 0.0, 695111.36, 0.0, 0.0, 0.0, 712489.14, 0.0, 0.0, 0.0, 0.0, 730301.37, 0.0, 0.0],
+      "Tarjetas ARS":[203636.05, 1326015.76, 0.0, 0.0, 0.0, 152703.12, 35057.42, 0.0, 0.0, 152703.08, 35057.42, 0.0, 0.0, 93217.74, 35057.42, 0.0, 0.0, 0.0, 93217.74, 35057.42, 0.0, 0.0],
+      "Expensas":[0.0, 0.0, 270820.26, 0.0, 0.0, 0.0, 270820.26, 0.0, 0.0, 0.0, 270820.26, 0.0, 0.0, 0.0, 270820.26, 0.0, 0.0, 0.0, 270820.26, 0.0, 0.0, 0.0],
+      "Servicios (Electricidad)":[0.0, 0.0, 0.0, 0.0, 156541.4, 0.0, 0.0, 0.0, 156541.4, 0.0, 0.0, 0.0, 156541.4, 0.0, 0.0, 0.0, 156541.4, 0.0, 0.0, 0.0, 0.0, 156541.4],
+      "Tarjetas USD":[28738.5, 220926.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+      "Servicios (TV/Internet)":[42519.28, 0.0, 0.0, 0.0, 0.0, 42519.28, 0.0, 0.0, 0.0, 42519.28, 0.0, 0.0, 0.0, 42519.28, 0.0, 0.0, 0.0, 42519.28, 0.0, 0.0, 0.0, 0.0],
+      "Tasas Municipales":[0.0, 0.0, 40202.0, 0.0, 0.0, 0.0, 40202.0, 0.0, 0.0, 0.0, 40202.0, 0.0, 0.0, 0.0, 40202.0, 0.0, 0.0, 0.0, 40202.0, 0.0, 0.0, 0.0],
+      "Servicios (Gas)":[0.0, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 0.0, 10036.73]
     },
-    ppItems:[{"ci":0,"amount":82539.31,"desc":"2/3 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":1,"amount":1326015.76,"desc":"10/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":5,"amount":77652.04,"desc":"1/4 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":35057.42,"desc":"14/04 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":7,"amount":722998.08,"desc":"05/04 3 PACK","bank":"IN04/02 FXX/XX","cat":"Proveedores"},{"ci":8,"amount":652184.89,"desc":"25/04 ARTEPLAST","bank":"IN23/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":77652,"desc":"4/5 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":10,"amount":35057.42,"desc":"12/05 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":13,"amount":18166.66,"desc":"2/6 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":14,"amount":35057.42,"desc":"09/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":18,"amount":18166.66,"desc":"2/7 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":19,"amount":35057.42,"desc":"14/07 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":0,"amount":12156.9,"desc":"2/3 USD JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":1,"amount":220926.3,"desc":"10/03 USD ICBC VISA","bank":"ICBC","cat":"Tarjetas USD"},{"ci":0,"amount":118857.96,"desc":"2/3 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":652538.43,"desc":"09/04 SAIZ CAPUTO","bank":"IN10/02 F09/02","cat":"Proveedores"},{"ci":0,"amount":12127.5,"desc":"2/3 USD JM MC","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":5,"amount":37555.55,"desc":"1/4 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":1774790,"desc":"11/04 ROLANPLAST","bank":"IN19/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":37555.55,"desc":"4/5 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37555.55,"desc":"2/6 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37555.55,"desc":"2/7 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":2238.78,"desc":"2/3 VISA BAPRO","bank":"B PROVINCIA","cat":"Tarjetas ARS"},{"ci":5,"amount":37495.53,"desc":"1/4 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":9,"amount":37495.53,"desc":"4/5 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37495.53,"desc":"2/6 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37495.53,"desc":"2/7 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":4454.1,"desc":"2/3 US VIS JM","bank":"B PROVINCIA","cat":"Tarjetas USD"},{"ci":0,"amount":693500,"desc":"21/02 MIGUEL CORRUGADO","bank":"IN15/01F15/01","cat":"Proveedores"},{"ci":8,"amount":1200000,"desc":"25/04 SAIZ CAPUTO","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":13,"amount":1500000,"desc":"30/05 NARDONE","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":0,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":2,"amount":270820.26,"desc":"10/02 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":4,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":5,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":6,"amount":270820.26,"desc":"10/04 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":8,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":9,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":10,"amount":270820.26,"desc":"10/05 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":12,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":13,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":14,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":16,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":17,"amount":906740.31,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":18,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":21,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":0,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/03","cat":"Servicios (TV/Internet)"},{"ci":2,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":4,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":5,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/04","cat":"Servicios (TV/Internet)"},{"ci":6,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":8,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":9,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/05","cat":"Servicios (TV/Internet)"},{"ci":10,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":12,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":13,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/06","cat":"Servicios (TV/Internet)"},{"ci":14,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":16,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":17,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/07","cat":"Servicios (TV/Internet)"},{"ci":18,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":21,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":1,"amount":661617,"desc":"10/03 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":6,"amount":678157.42,"desc":"10/04 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":10,"amount":695111.36,"desc":"10/05 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":14,"amount":712489.14,"desc":"10/06 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":19,"amount":730301.37,"desc":"10/07 VALENTINA","bank":"","cat":"Valentina (Personal)"}]
+    ppItems:[{"ci":0,"amount":82539.31,"desc":"2/3 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":1,"amount":1326015.76,"desc":"10/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":5,"amount":77652.04,"desc":"1/4 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":35057.42,"desc":"14/04 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":7,"amount":722998.08,"desc":"05/04 3 PACK","bank":"IN04/02 FXX/XX","cat":"Proveedores"},{"ci":8,"amount":652184.89,"desc":"25/04 ARTEPLAST","bank":"IN23/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":77652.0,"desc":"4/5 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":10,"amount":35057.42,"desc":"12/05 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":13,"amount":18166.66,"desc":"2/6 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":14,"amount":35057.42,"desc":"09/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":18,"amount":18166.66,"desc":"2/7 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":19,"amount":35057.42,"desc":"14/07 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":0,"amount":12156.9,"desc":"2/3 USD JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":1,"amount":220926.3,"desc":"10/03 USD ICBC VISA","bank":"ICBC","cat":"Tarjetas USD"},{"ci":0,"amount":118857.96,"desc":"2/3 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":652538.43,"desc":"09/04 SAIZ CAPUTO","bank":"IN10/02 F09/02","cat":"Proveedores"},{"ci":0,"amount":12127.5,"desc":"2/3 USD JM MC","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":5,"amount":37555.55,"desc":"1/4 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":1774790.0,"desc":"11/04 ROLANPLAST","bank":"IN19/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":37555.55,"desc":"4/5 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37555.55,"desc":"2/6 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37555.55,"desc":"2/7 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":2238.78,"desc":"2/3 VISA BAPRO","bank":"B PROVINCIA","cat":"Tarjetas ARS"},{"ci":5,"amount":37495.53,"desc":"1/4 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":9,"amount":37495.53,"desc":"4/5 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37495.53,"desc":"2/6 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37495.53,"desc":"2/7 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":4454.1,"desc":"2/3 US VIS JM","bank":"B PROVINCIA","cat":"Tarjetas USD"},{"ci":0,"amount":693500.0,"desc":"21/02 MIGUEL CORRUGADO","bank":"IN15/01F15/01","cat":"Proveedores"},{"ci":7,"amount":700000.0,"desc":"18/04 EMBAL GROUP","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":8,"amount":1200000.0,"desc":"25/04 SAIZ CAPUTO","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":13,"amount":1500000.0,"desc":"30/05 NARDONE","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":0,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":2,"amount":270820.26,"desc":"10/02 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":4,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":5,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":6,"amount":270820.26,"desc":"10/04 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":8,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":9,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":10,"amount":270820.26,"desc":"10/05 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":12,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":13,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":14,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":16,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":17,"amount":906740.31,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":18,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":21,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":0,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/03","cat":"Servicios (TV/Internet)"},{"ci":2,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":4,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":5,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/04","cat":"Servicios (TV/Internet)"},{"ci":6,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":8,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":9,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/05","cat":"Servicios (TV/Internet)"},{"ci":10,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":12,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":13,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/06","cat":"Servicios (TV/Internet)"},{"ci":14,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":16,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":17,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/07","cat":"Servicios (TV/Internet)"},{"ci":18,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":21,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":1,"amount":661617.0,"desc":"10/03 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":6,"amount":678157.42,"desc":"10/04 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":10,"amount":695111.36,"desc":"10/05 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":14,"amount":712489.14,"desc":"10/06 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":19,"amount":730301.37,"desc":"10/07 VALENTINA","bank":"","cat":"Valentina (Personal)"}]
   };
   // Compute scenarios from embedded data
   for(let si=0;si<SCENARIO_PCTS.length;si++){
