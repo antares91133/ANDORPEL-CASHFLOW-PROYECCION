@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANDORPEL — Dashboard Proyección Cashflow</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#ffffff;--bg2:#f6f7f9;--card:#ffffff;--card2:#f0f2f5;
+  --brd:#e2e6ed;--brd2:#d0d6e0;
+  --t1:#1a2030;--t2:#4a5568;--t3:#8896a8;
+  --grn:#059669;--grn2:rgba(5,150,105,.08);
+  --red:#dc2626;--red2:rgba(220,38,38,.07);
+  --blu:#2563eb;--blu2:rgba(37,99,235,.07);
+  --amb:#d97706;--amb2:rgba(217,119,6,.07);
+  --pur:#7c3aed;--pur2:rgba(124,58,237,.07);
+  --cyn:#0891b2;
+  --navy:#0f1d3a;
+}
+body{font-family:'Instrument Sans',sans-serif;background:var(--bg2);color:var(--t1);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 70% 40% at 20% 0%,rgba(37,99,235,.04),transparent),
+    radial-gradient(ellipse 50% 35% at 90% 100%,rgba(124,58,237,.03),transparent);
+  pointer-events:none;}
+.app{position:relative;z-index:1;max-width:1440px;margin:0 auto;}
+
+/* HEADER */
+.brand-bar{padding:14px 28px 12px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:space-between;}
+.brand-bar .brand-l{display:flex;align-items:baseline;gap:14px;}
+.brand-bar h2{font-size:22px;font-weight:700;letter-spacing:1.5px;color:#fff;}
+.brand-bar .brand-sep{width:1px;height:28px;background:rgba(255,255,255,.2);align-self:center;}
+.brand-bar .brand-title{font-size:13px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.85);}
+.brand-bar .brand-sub{font-size:10px;color:rgba(255,255,255,.45);font-family:'IBM Plex Mono',monospace;letter-spacing:.3px;}
+header{padding:12px 28px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--brd);background:rgba(255,255,255,.85);backdrop-filter:blur(16px);
+  position:sticky;top:0;z-index:100;}
+.hdr-l{display:flex;align-items:center;gap:14px;}
+.mark{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  background:var(--navy);font-weight:700;font-size:15px;color:#fff;
+  font-family:'IBM Plex Mono',monospace;}
+header h1{font-size:17px;font-weight:600;letter-spacing:-.3px;color:var(--t1);}
+header h1 small{color:var(--t3);font-weight:400;font-size:12px;margin-left:8px;}
+.hdr-r{display:flex;align-items:center;gap:10px;}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--grn);
+  box-shadow:0 0 4px var(--grn);animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.st{font-size:11px;color:var(--t3);font-family:'IBM Plex Mono',monospace;}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;
+  background:var(--bg);border:1px solid var(--brd);border-radius:7px;
+  color:var(--t1);font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:500;
+  cursor:pointer;transition:.2s;}
+.btn:hover{background:var(--card2);border-color:var(--brd2);}
+.btn svg{width:13px;height:13px;}
+.btn.act svg{animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn-primary{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600;}
+.btn-primary:hover{opacity:.88;background:var(--navy);}
+
+/* ONEDRIVE STATUS */
+.od-status{display:flex;align-items:center;gap:6px;padding:4px 10px;
+  border-radius:5px;font-size:10px;font-family:'IBM Plex Mono',monospace;}
+.od-status.ok{background:var(--grn2);color:var(--grn);}
+.od-status.err{background:var(--red2);color:var(--red);}
+.od-status.loading{background:var(--amb2);color:var(--amb);}
+
+/* TABS */
+nav.tabs{display:flex;gap:3px;padding:10px 28px;border-bottom:1px solid var(--brd);background:rgba(255,255,255,.6);}
+.tab{padding:7px 18px;border-radius:5px;font-size:12px;font-weight:500;color:var(--t3);
+  cursor:pointer;transition:.2s;border:1px solid transparent;}
+.tab:hover{color:var(--t1);background:var(--card2);}
+.tab.active{color:var(--blu);background:var(--blu2);border-color:rgba(37,99,235,.15);font-weight:600;}
+
+/* MAIN */
+main{padding:20px 28px 40px;}
+.tc{display:none;}.tc.active{display:block;}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.kpi{background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:18px 20px;
+  position:relative;overflow:hidden;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.kpi:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.08);}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.kpi:nth-child(1)::after{background:linear-gradient(90deg,var(--grn),var(--cyn));}
+.kpi:nth-child(2)::after{background:linear-gradient(90deg,var(--blu),var(--pur));}
+.kpi:nth-child(3)::after{background:linear-gradient(90deg,var(--red),var(--amb));}
+.kpi:nth-child(4)::after{background:linear-gradient(90deg,var(--amb),var(--grn));}
+.kpi-ico{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;margin-bottom:12px;font-size:16px;}
+.kpi:nth-child(1) .kpi-ico{background:var(--grn2);color:var(--grn);}
+.kpi:nth-child(2) .kpi-ico{background:var(--blu2);color:var(--blu);}
+.kpi:nth-child(3) .kpi-ico{background:var(--red2);color:var(--red);}
+.kpi:nth-child(4) .kpi-ico{background:var(--amb2);color:var(--amb);}
+.kpi-lbl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin-bottom:5px;}
+.kpi-val{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;letter-spacing:-.4px;}
+.kpi-val.neg{color:var(--red);}.kpi-val.pos{color:var(--grn);}
+.kpi-sub{font-size:10px;color:var(--t3);margin-top:5px;font-family:'IBM Plex Mono',monospace;}
+
+/* CHARTS */
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.cc{background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:18px 20px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.cc.fw{grid-column:1/-1;}
+.cc-t{font-size:13px;font-weight:600;margin-bottom:3px;}
+.cc-s{font-size:10px;color:var(--t3);margin-bottom:14px;font-family:'IBM Plex Mono',monospace;}
+.ch{position:relative;width:100%;}.h280{height:280px;}.h320{height:320px;}.h360{height:360px;}
+
+/* TABLE */
+.xtbl{width:100%;border-collapse:collapse;font-size:12px;}
+.xtbl th{text-align:left;padding:9px 10px;color:var(--t3);font-size:10px;text-transform:uppercase;
+  letter-spacing:.5px;border-bottom:2px solid var(--brd);font-weight:600;}
+.xtbl td{padding:7px 10px;border-bottom:1px solid var(--brd);
+  font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t2);}
+.xtbl tr:hover td{background:rgba(37,99,235,.03);}
+.bar-bg{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;width:180px;}
+.bar-fi{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--blu),var(--pur));transition:width .5s;}
+
+/* Scenario legend */
+.sc-legend{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+.sc-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--t2);}
+.sc-dot{width:10px;height:3px;border-radius:2px;}
+
+/* Loading / Upload */
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(255,255,255,.92);
+  backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+.overlay.on{display:flex;}
+.spinner{width:36px;height:36px;border:3px solid var(--brd);
+  border-top-color:var(--blu);border-radius:50%;animation:spin .7s linear infinite;}
+.overlay span{color:var(--t2);font-size:13px;}
+
+.footer{text-align:center;padding:20px;color:var(--t3);font-size:10px;
+  font-family:'IBM Plex Mono',monospace;border-top:1px solid var(--brd);background:var(--bg);}
+
+/* Responsive */
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(2,1fr);}.cg{grid-template-columns:1fr;}
+  main{padding:14px;}header{padding:12px 14px;}nav.tabs{padding:10px 14px;}.brand-bar{padding:12px 14px;}}
+@media(max-width:600px){.kpi-row{grid-template-columns:1fr;}header h1 small{display:none;}
+  .brand-bar .brand-l{flex-wrap:wrap;gap:8px;}.brand-bar .brand-sep{display:none;}
+  .brand-bar h2{font-size:18px;width:100%;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- BRAND BAR -->
+  <div class="brand-bar">
+    <div class="brand-l">
+      <h2>ANDORPEL</h2>
+      <div class="brand-sep"></div>
+      <div>
+        <div class="brand-title">DASHBOARD PROYECCIÓN CASHFLOW</div>
+        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Pulsar «Refrescar fuentes de OneDrive» para actualizar</div>
+      </div>
+    </div>
+  </div>
+  <header>
+    <div class="hdr-l">
+      <div class="mark">CF</div>
+      <h1>Cash Flow <small>· ARS · Semanal</small></h1>
+    </div>
+    <div class="hdr-r">
+      <div class="od-status loading" id="odStatus">⏳ Intentando OneDrive…</div>
+      <div class="dot" id="dot"></div>
+      <span class="st" id="stTxt">Inicializando</span>
+      <button class="btn" onclick="document.getElementById('fi').click()" style="opacity:.7;font-size:11px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        Cargar .xlsx
+      </button>
+      <button class="btn btn-primary" id="btnOD" onclick="fetchOneDrive()" style="padding:9px 18px;font-size:13px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Refrescar fuentes de OneDrive
+      </button>
+      <input type="file" id="fi" accept=".xlsx,.xls" style="display:none">
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <div class="tab active" data-tab="op">CASHFLOW OPERATIVO</div>
+    <div class="tab" data-tab="pp">PAGOS PREVISTOS</div>
+    <div class="tab" data-tab="sc">ESCENARIOS DE INGRESO</div>
+    <div class="tab" data-tab="pr">PROYECCIÓN EXTENDIDA</div>
+    <div class="tab" data-tab="dt">EGRESOS</div>
+  </nav>
+
+  <main>
+    <!-- TAB OPERATIVO -->
+    <div class="tc active" id="tab-op">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-ico">💰</div><div class="kpi-lbl">Saldo Consolidado</div>
+          <div class="kpi-val" id="k1">--</div><div class="kpi-sub" id="k1s">—</div></div>
+        <div class="kpi"><div class="kpi-ico">📈</div><div class="kpi-lbl">Ingresos Semana Actual</div>
+          <div class="kpi-val" id="k2">--</div><div class="kpi-sub" id="k2s">—</div></div>
+        <div class="kpi"><div class="kpi-ico">📉</div><div class="kpi-lbl">Egresos Próxima Semana</div>
+          <div class="kpi-val" id="k3">--</div><div class="kpi-sub" id="k3s">—</div></div>
+        <div class="kpi"><div class="kpi-ico">⏱️</div><div class="kpi-lbl">Runway Estimado</div>
+          <div class="kpi-val" id="k4">--</div><div class="kpi-sub" id="k4s">—</div></div>
+      </div>
+      <div class="cg">
+        <div class="cc fw"><div class="cc-t">Evolución del Saldo Semanal</div>
+          <div class="cc-s">Saldo remanente post-pagos · ARS</div>
+          <div class="ch h280"><canvas id="c1"></canvas></div></div>
+        <div class="cc"><div class="cc-t">Ingresos vs Egresos</div>
+          <div class="cc-s">Comparativo semanal · ARS</div>
+          <div class="ch h280"><canvas id="c2"></canvas></div></div>
+        <div class="cc"><div class="cc-t">Desglose de Gastos</div>
+          <div class="cc-s">Distribución acumulada</div>
+          <div class="ch h280"><canvas id="c3"></canvas></div></div>
+        <div class="cc fw"><div class="cc-t">Saldos por Banco</div>
+          <div class="cc-s">Evolución semanal por entidad · ARS</div>
+          <div class="ch h280"><canvas id="c4"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- TAB PAGOS PREVISTOS -->
+    <div class="tc" id="tab-pp">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-ico">💸</div><div class="kpi-lbl">Total Pagos Previstos</div>
+          <div class="kpi-val neg" id="ppTotal">--</div><div class="kpi-sub" id="ppTotalS">Acumulado período</div></div>
+        <div class="kpi"><div class="kpi-ico">🏠</div><div class="kpi-lbl">Vivienda + Servicios</div>
+          <div class="kpi-val" id="ppViv">--</div><div class="kpi-sub">Alquiler + expensas + servicios</div></div>
+        <div class="kpi"><div class="kpi-ico">💳</div><div class="kpi-lbl">Tarjetas de Crédito</div>
+          <div class="kpi-val" id="ppTarj">--</div><div class="kpi-sub">VISA + Mastercard (ARS + USD)</div></div>
+        <div class="kpi"><div class="kpi-ico">🏭</div><div class="kpi-lbl">Proveedores</div>
+          <div class="kpi-val" id="ppProv">--</div><div class="kpi-sub" id="ppProvS">Facturas de proveedores</div></div>
+      </div>
+      <div class="cg">
+        <div class="cc"><div class="cc-t">Composición de Pagos Previstos</div>
+          <div class="cc-s">Distribución porcentual por categoría</div>
+          <div class="ch h320"><canvas id="cPP1"></canvas></div></div>
+        <div class="cc"><div class="cc-t">Evolución Semanal por Categoría</div>
+          <div class="cc-s">Barras apiladas · ARS</div>
+          <div class="ch h320"><canvas id="cPP2"></canvas></div></div>
+        <div class="cc fw"><div class="cc-t">Cronograma de Pagos Previstos</div>
+          <div class="cc-s">Líneas por categoría · ARS</div>
+          <div class="ch h280"><canvas id="cPP3"></canvas></div></div>
+
+        <!-- Desglose Proveedores -->
+        <div class="cc fw">
+          <div class="cc-t">Desglose de Proveedores</div>
+          <div class="cc-s">Detalle individual de pagos a proveedores</div>
+          <div class="cg" style="margin-top:10px;gap:10px;">
+            <div class="ch h280"><canvas id="cPP4"></canvas></div>
+            <div style="overflow-x:auto;">
+              <table class="xtbl" id="tblProveedores"><thead>
+                <tr><th>Proveedor</th><th>Semana</th><th>Monto ARS</th><th>Observación</th></tr>
+              </thead><tbody></tbody></table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla resumen por categoría -->
+        <div class="cc fw">
+          <div class="cc-t">Resumen por Categoría</div>
+          <div class="cc-s">Totales, promedios semanales y distribución</div>
+          <div style="overflow-x:auto;margin-top:10px;">
+            <table class="xtbl" id="tblPP"><thead>
+              <tr><th>Categoría</th><th>Total ARS</th><th>Promedio Semanal</th><th>% del Total</th><th>Distribución</th><th>Sem. Activas</th></tr>
+            </thead><tbody></tbody></table>
+          </div>
+        </div>
+
+        <!-- Tabla desglose detallado de todos los ítems -->
+        <div class="cc fw">
+          <div class="cc-t">Desglose Detallado de Pagos</div>
+          <div class="cc-s">Todos los pagos individuales del período</div>
+          <div style="overflow-x:auto;margin-top:10px;max-height:400px;overflow-y:auto;">
+            <table class="xtbl" id="tblPPDetail"><thead>
+              <tr><th>Semana</th><th>Categoría</th><th>Descripción</th><th>Banco / Origen</th><th>Monto ARS</th></tr>
+            </thead><tbody></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB ESCENARIOS -->
+    <div class="tc" id="tab-sc">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-ico">📊</div><div class="kpi-lbl">Ingreso Semanal Base</div>
+          <div class="kpi-val pos" id="scBase">--</div><div class="kpi-sub">Promedio actual</div></div>
+        <div class="kpi"><div class="kpi-ico">🎯</div><div class="kpi-lbl">Break-Even Requerido</div>
+          <div class="kpi-val" id="scBE">--</div><div class="kpi-sub" id="scBEs">Incremento necesario</div></div>
+        <div class="kpi"><div class="kpi-ico">🚀</div><div class="kpi-lbl">Mejor Escenario (+30%)</div>
+          <div class="kpi-val" id="scBest">--</div><div class="kpi-sub">Saldo final proyectado</div></div>
+        <div class="kpi"><div class="kpi-ico">⚠️</div><div class="kpi-lbl">Peor Punto (Base)</div>
+          <div class="kpi-val neg" id="scWorst">--</div><div class="kpi-sub">Mínimo proyectado</div></div>
+      </div>
+      <div class="cg">
+        <!-- Tabla de escenarios con valores absolutos -->
+        <div class="cc fw">
+          <div class="cc-t">Comparativa de Escenarios · Porcentaje y Valor Absoluto</div>
+          <div class="cc-s">Ingreso semanal promedio por escenario y saldo final proyectado</div>
+          <div style="overflow-x:auto;margin-top:10px;">
+            <table class="xtbl" id="tblScenarios"><thead>
+              <tr><th>Escenario</th><th>Incremento</th><th>Ingreso Semanal Promedio</th><th>Ingreso Semanal Adicional</th><th>Saldo Final</th><th>Diferencia vs Base</th></tr>
+            </thead><tbody></tbody></table>
+          </div>
+        </div>
+        <div class="cc fw">
+          <div class="cc-t">Proyección de Saldo según Escenarios de Ingreso</div>
+          <div class="cc-s">Base vs incrementos del 5%, 10%, 15%, 20% y 30% en ingresos semanales</div>
+          <div class="sc-legend" id="scLegend"></div>
+          <div class="ch h360"><canvas id="c5"></canvas></div>
+        </div>
+        <div class="cc fw">
+          <div class="cc-t">Impacto Acumulado por Escenario</div>
+          <div class="cc-s">Diferencia acumulada vs Base al final del período · ARS</div>
+          <div class="ch h280"><canvas id="c6"></canvas></div>
+        </div>
+        <!-- New: Income comparison chart -->
+        <div class="cc fw">
+          <div class="cc-t">Ingreso Semanal Promedio por Escenario</div>
+          <div class="cc-s">Comparativa en valores absolutos · ARS</div>
+          <div class="ch h280"><canvas id="cSC2"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB PROYECCIÓN -->
+    <div class="tc" id="tab-pr">
+      <div class="cg">
+        <div class="cc fw"><div class="cc-t">Modelo de Proyección Extendida</div>
+          <div class="cc-s">Curva del modelo matemático · ARS</div>
+          <div class="ch h360"><canvas id="c7"></canvas></div></div>
+        <div class="cc fw"><div class="cc-t">Real vs Modelo (Período Operativo)</div>
+          <div class="cc-s">Comparativa saldo real vs curva del modelo</div>
+          <div class="ch h320"><canvas id="c8"></canvas></div></div>
+        <div class="cc fw"><div class="cc-t">Modelo vs Escenarios de Ingreso</div>
+          <div class="cc-s">Proyección del modelo base superpuesta con las curvas de escenarios</div>
+          <div class="sc-legend" id="scLegend2"></div>
+          <div class="ch h360"><canvas id="cPR1"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- TAB EGRESOS -->
+    <div class="tc" id="tab-dt">
+      <div class="cc">
+        <div class="cc-t">Ranking de Egresos Acumulados</div>
+        <div class="cc-s">Total período con promedio semanal · Ordenado por monto</div>
+        <div style="overflow-x:auto;margin-top:10px;">
+          <table class="xtbl" id="tbl"><thead>
+            <tr><th>Categoría</th><th>Total ARS</th><th>Promedio Semanal</th><th>%</th><th>Distribución</th></tr>
+          </thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="cg" style="margin-top:14px;">
+        <div class="cc fw"><div class="cc-t">Top 5 Egresos · Evolución Semanal</div>
+          <div class="cc-s">Barras apiladas por categoría · ARS</div>
+          <div class="ch h320"><canvas id="c9"></canvas></div></div>
+        <div class="cc fw"><div class="cc-t">Promedio Semanal por Categoría de Egreso</div>
+          <div class="cc-s">Barras horizontales · ARS/semana</div>
+          <div class="ch h360"><canvas id="cEG1"></canvas></div></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">ANDORPEL · CASH FLOW DASHBOARD · Última actualización: <span id="upd">—</span></footer>
+</div>
+
+<div class="overlay" id="ov"><div class="spinner"></div><span id="ovTxt">Procesando…</span></div>
+
+<script>
+// ===================== CONFIG =====================
+const ONEDRIVE_SHARE_URL = 'https://1drv.ms/x/c/b796724014ec33b5/IQC1M-wUQHKWIIC3gaoBAAAAAfy3YFfd32T0X3T3Xtiolfs?e=BZjvui';
+const SCENARIO_PCTS = [0, 0.05, 0.10, 0.15, 0.20, 0.30];
+const SCENARIO_LABELS = ['Base','+ 5%','+ 10%','+ 15%','+ 20%','+ 30%'];
+const SCENARIO_COLORS = ['#dc2626','#d97706','#059669','#2563eb','#7c3aed','#0891b2'];
+
+// ===================== DATA STORE =====================
+let D = null;
+
+// ===================== UTILITIES =====================
+function fA(n){if(n==null||isNaN(n))return'--';const a=Math.abs(n);let s;
+  if(a>=1e6)s=(n/1e6).toFixed(2)+'M';else if(a>=1e3)s=(n/1e3).toFixed(0)+'K';else s=n.toFixed(0);
+  return(n<0?'- ':'')+' $'+s.replace('-','');}
+function fF(n){if(n==null||isNaN(n))return'--';
+  return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:0,maximumFractionDigits:0}).format(n);}
+function fD(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1];}
+function fW(d){return'Sem '+fD(d);}
+
+// ===================== CHART DEFAULTS =====================
+Chart.defaults.color='#8896a8';
+Chart.defaults.borderColor='rgba(226,230,237,.6)';
+Chart.defaults.font.family="'Instrument Sans',sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.plugins.legend.labels.usePointStyle=true;
+Chart.defaults.plugins.legend.labels.pointStyleWidth=8;
+Chart.defaults.plugins.legend.labels.padding=14;
+const TT={backgroundColor:'#0f1d3a',titleColor:'#fff',bodyColor:'rgba(255,255,255,.8)',
+  borderColor:'rgba(255,255,255,.1)',borderWidth:1,cornerRadius:7,padding:10,
+  titleFont:{family:"'Instrument Sans'",weight:'600',size:11},
+  bodyFont:{family:"'IBM Plex Mono'",size:10},
+  callbacks:{label:c=>c.dataset.label+': '+fF(c.raw)}};
+
+let charts={};
+function destroyAll(){Object.values(charts).forEach(c=>c&&c.destroy());charts={};}
+
+// ===================== DYNAMIC EXCEL PARSER =====================
+function parseWorkbook(wb) {
+  const ws = wb.Sheets['CASHFLOW'] || wb.Sheets[wb.SheetNames[0]];
+  if(!ws) throw new Error('Sheet CASHFLOW no encontrado');
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+
+  // Helper: get cell value
+  function gv(r,c){const a=XLSX.utils.encode_cell({r:r-1,c:c-1});const cell=ws[a];
+    if(!cell)return null;return cell.v;}
+  function gvn(r,c){const v=gv(r,c);return(v!=null&&!isNaN(+v))?+v:0;}
+  function gvd(r,c){const a=XLSX.utils.encode_cell({r:r-1,c:c-1});const cell=ws[a];
+    if(!cell||!cell.v)return'';const d=cell.v;
+    if(d instanceof Date)return d.toISOString().split('T')[0];
+    if(typeof d==='number'){try{const dt=XLSX.SSF.parse_date_code(d);
+      return `${dt.y}-${String(dt.m).padStart(2,'0')}-${String(dt.d).padStart(2,'0')}`;}catch(e){return'';}}
+    return'';}
+
+  // STEP 1: Scan column A (rows 1-70) to build label→row map
+  const labelMap={};
+  for(let r=1;r<=Math.min(70,range.e.r+1);r++){
+    const v=gv(r,1);
+    if(v&&typeof v==='string'){labelMap[v.trim().toUpperCase()]=r;}}
+
+  function findRow(patterns){
+    for(const[label,row] of Object.entries(labelMap)){
+      for(const p of patterns){if(label.includes(p.toUpperCase()))return row;}}
+    return null;}
+
+  // STEP 2: Find date row — scan rows 3-6 for the one with most Date values
+  let dateRow=4; let maxDates=0;
+  for(let r=3;r<=6;r++){let cnt=0;
+    for(let c=2;c<=30;c++){const d=gvd(r,c);if(d)cnt++;}
+    if(cnt>maxDates){maxDates=cnt;dateRow=r;}}
+
+  // STEP 3: Determine data columns (all columns with a valid date in dateRow)
+  const dateCols=[];
+  for(let c=2;c<=range.e.c+1;c++){
+    const d=gvd(dateRow,c);
+    if(d&&d.match(/^\d{4}-\d{2}-\d{2}$/)){
+      dateCols.push(c);
+      // Stop if we hit column X (col 24) area — avoid reading the repeated labels column
+      // Check: if column A of this row has a label repeated, stop
+    }
+    // Safety: stop after 30 data columns max
+    if(dateCols.length>=30)break;
+  }
+  // Filter: remove last column if it's the "repeat label" column
+  // Heuristic: if the value in the last data col for a known row equals the col A label, remove it
+  const testRow = findRow(['SUMATORIO SALDOS FIN','SUMATORIO SALDOS FIN PERIODO']);
+  if(testRow && dateCols.length>1){
+    const lastC = dateCols[dateCols.length-1];
+    const lastV = gv(testRow, lastC);
+    if(lastV && typeof lastV==='string') dateCols.pop();
+  }
+
+  const dates = dateCols.map(c=>gvd(dateRow,c));
+
+  // STEP 4: Find key rows
+  const R={
+    cajaMedia:      findRow(['CAJA MEDIA']),
+    saldoInicio:    findRow(['SUMATORIO SALDOS INICIO']),
+    saldoFin:       findRow(['SUMATORIO SALDOS FIN']),
+    ingresoVentas:  findRow(['INGRESO ESTIMADO POR VENTAS']),
+    saldoRemanente: findRow(['SALDO REMANENTE INICIO']),
+    bancosVenc:     findRow(['5720','BANCOS (VENCIMIENTOS)']),
+    pagosEfectivo:  findRow(['5700','PAGOS EN EFECTIVO']),
+    supervielleCC:  findRow(['57200001P - SUPERVIELLE C/C FIN','SUPERVIELLE C/C FIN']),
+    icbc:           findRow(['57200001E - ICBC SALDO FIN','ICBC SALDO FIN']),
+    bapro:          findRow(['57200002P - BAPRO','BAPRO HAEDO C/C SALDO FIN']),
+  };
+
+  // Find saldo post pagos: search for the ROW with numeric data near the "SALDO POSTERIOR" label
+  let saldoPostRow = null;
+  const spLabel = findRow(['SALDO POSTERIOR A PAGOS']);
+  if(spLabel){
+    // Check rows around it for numeric data
+    for(let r=spLabel;r<=spLabel+5;r++){
+      const v=gvn(r,dateCols[0]);
+      if(v!==0){saldoPostRow=r;break;}
+    }
+    if(!saldoPostRow){
+      // Try the row after the label that has the most non-zero values
+      for(let r=spLabel+1;r<=spLabel+5;r++){
+        let cnt=0;
+        for(const c of dateCols){if(gvn(r,c)!==0)cnt++;}
+        if(cnt>dateCols.length/3){saldoPostRow=r;break;}
+      }
+    }
+  }
+
+  // Find modelo row
+  let modeloRow=null;
+  const modLabel=findRow(['MODELO']);
+  if(modLabel)modeloRow=modLabel;
+
+  // Find modelo date row (should be near modelo row, typically +2)
+  let modeloDateRow=null;
+  if(modeloRow){
+    for(let r=modeloRow+1;r<=modeloRow+4;r++){
+      const d=gvd(r,dateCols[0]);
+      if(d){modeloDateRow=r;break;}
+    }
+  }
+
+  // STEP 5: Read data arrays
+  function readRow(row){return row?dateCols.map(c=>gvn(row,c)):dateCols.map(()=>0);}
+
+  const data = {
+    dates: dates,
+    numWeeks: dates.length,
+    saldoInicio: readRow(R.saldoInicio),
+    saldoFin: readRow(R.saldoFin),
+    saldoRemanente: readRow(R.saldoRemanente),
+    ingresoVentas: readRow(R.ingresoVentas),
+    cajaMedia: readRow(R.cajaMedia),
+    supervielle: readRow(R.supervielleCC),
+    icbc: readRow(R.icbc),
+    bapro: readRow(R.bapro),
+    saldoPostPagos: saldoPostRow ? readRow(saldoPostRow) : readRow(R.saldoFin),
+    bancosVenc: readRow(R.bancosVenc),
+    pagosEfectivo: readRow(R.pagosEfectivo),
+  };
+
+  // Expense categories
+  const expDefs = [
+    ['Alquiler Gaona', ['ALQUILER GAONA','62100002']],
+    ['AFIP (IVA)', ['47500001','AFIP (IVA)']],
+    ['AFIP (Autónomos)', ['64200050','AFIP (AUTONOMOS)']],
+    ['Seg. Fed. Patronal', ['62500002','FEDERACIÓN PATRONAL']],
+    ['Sistema Gestión', ['62300001','SISTEMA GESTIÓN']],
+    ['Contaduría', ['62600001','CONTADURÍA']],
+    ['ARCA Plan Pagos', ['47500084','ARCA']],
+    ['Teléfono Fijo', ['62800002','TELÉFONO FIJO']],
+    ['Móviles', ['62800004','TELEFÓNICA MÓVILES']],
+    ['Electricidad', ['62800003','SUMINISTRO ELECTRICIDAD']],
+    ['Medicus', ['64200001','MEDICUS']],
+    ['Sueldos y Salarios', ['6400XXXX','SUELDOS Y SALARIOS']],
+    ['Cargas Sociales', ['6420XXXX','CARGAS SOCIALES']],
+    ['Seg. Vehículos', ['62500001','SEGURO VEHÍCULOS']],
+    ['Seg. & Higiene', ['63100002','SEGURIDAD','HIGIENE']],
+    ['IIBB', ['63100003','IIBB']],
+    ['Préstamo BAPRO', ['PRESTAMO BAPRO']],
+    ['Gastos Bancarios', ['6690XXXX','GASTOS BANCARIOS']],
+  ];
+
+  data.expenses = {};
+  data.catTotals = {};
+  for(const [name, patterns] of expDefs){
+    const row = findRow(patterns);
+    const vals = readRow(row);
+    data.expenses[name] = vals;
+    const total = vals.reduce((a,b)=>a+b,0);
+    if(total>0) data.catTotals[name] = Math.round(total*100)/100;
+  }
+  // Pagos Previstos as category (renamed from Pagos Efectivo)
+  const peTotal = data.pagosEfectivo.reduce((a,b)=>a+b,0);
+  if(peTotal>0){data.catTotals['Pagos Previstos']=Math.round(peTotal*100)/100;
+    data.expenses['Pagos Previstos']=data.pagosEfectivo;}
+
+  // ---- CLASSIFY PAGOS PREVISTOS into sub-categories ----
+  function classifyPayment(desc, bank){
+    const d=(desc||'').toUpperCase(), b=(bank||'').toUpperCase();
+    // Check specific names BEFORE generic patterns
+    if(d.includes('CABLEVISIÓN')||d.includes('CABLEVISION'))return'Servicios (TV/Internet)';
+    if(d.includes('ALQUILER'))return'Alquiler Vivienda';
+    if(d.includes('EXPENSAS'))return'Expensas';
+    if(d.includes('EDENOR')||b.includes('ELECTRICIDAD'))return'Servicios (Electricidad)';
+    if(d.includes('NATURGY')||b.includes('GAS'))return'Servicios (Gas)';
+    if(d.includes('TSG')||b.includes('MUNI'))return'Tasas Municipales';
+    if(d.includes('VALENTINA'))return'Valentina (Personal)';
+    if(['SAIZ CAPUTO','ROLANPLAST','MIGUEL','CORRUGADO','3 PACK','ARTEPLAST','NARDONE'].some(x=>d.includes(x)))return'Proveedores';
+    if(b.includes('PREVISIÓN')||b.includes('PREVISION'))return'Proveedores';
+    if(d.includes('VIS')||d.includes('VISA')){return d.includes('USD')||d.includes('US ')?'Tarjetas USD':'Tarjetas ARS';}
+    if(d.includes('MC')||d.includes('MASTER')||d.includes('MAS ')){return d.includes('USD')?'Tarjetas USD':'Tarjetas ARS';}
+    return'Otros';
+  }
+
+  // Parse payment item rows (triplets: amount, description, bank)
+  const ppItems=[];
+  const ppParseRanges=[[71,101],[110,113],[116,130]];
+  for(const [startR,endR] of ppParseRanges){
+    let r=startR;
+    while(r<=endR){
+      let hasNum=false;
+      for(const c of dateCols){const v=gvn(r,c);if(v!==0){hasNum=true;break;}}
+      if(hasNum){
+        for(const c of dateCols){
+          const amt=gvn(r,c);
+          if(amt!==0){
+            const desc=String(gv(r+1,c)||'');
+            const bank=String(gv(r+2,c)||'');
+            const ci=dateCols.indexOf(c);
+            ppItems.push({ci,amount:amt,desc,bank,cat:classifyPayment(desc,bank)});
+          }
+        }
+        r+=3;
+      }else{r++;}
+    }
+  }
+
+  // Aggregate by category per week
+  const ppCats=new Set(ppItems.map(p=>p.cat));
+  data.ppCatByWeek={};
+  for(const cat of ppCats){
+    data.ppCatByWeek[cat]=new Array(dateCols.length).fill(0);
+  }
+  for(const p of ppItems){
+    data.ppCatByWeek[p.cat][p.ci]+=p.amount;
+  }
+  // Round
+  for(const cat in data.ppCatByWeek){
+    data.ppCatByWeek[cat]=data.ppCatByWeek[cat].map(v=>Math.round(v*100)/100);
+  }
+  data.ppItems=ppItems;
+
+  // Total egresos per week
+  data.totalEgresos = dateCols.map((_,i)=>{
+    let s=data.pagosEfectivo[i]||0;
+    for(const vals of Object.values(data.expenses)){s+=(vals[i]||0);}
+    // Subtract pagosEfectivo once since it's already in expenses
+    s -= (data.pagosEfectivo[i]||0);
+    // Recalculate properly
+    return 0;
+  });
+  // Proper calculation
+  data.totalEgresos = dateCols.map((_,i)=>{
+    let s=0;
+    for(const [name,vals] of Object.entries(data.expenses)){s+=(vals[i]||0);}
+    return Math.round(s*100)/100;
+  });
+
+  // Modelo extended projection
+  data.modeloDates=[];data.modeloVals=[];
+  if(modeloRow && modeloDateRow){
+    for(let c=2;c<=range.e.c+1;c++){
+      const d=gvd(modeloDateRow,c);
+      const v=gvn(modeloRow,c);
+      if(d && v!==0){data.modeloDates.push(d);data.modeloVals.push(Math.round(v*100)/100);}
+    }
+  }
+
+  // Scenarios
+  data.scenarios = {};
+  for(let si=0;si<SCENARIO_PCTS.length;si++){
+    const pct = SCENARIO_PCTS[si];
+    const label = SCENARIO_LABELS[si];
+    const projected = [];
+    let balance = data.saldoRemanente[0] || data.saldoFin[0] || 0;
+    for(let i=0;i<data.numWeeks;i++){
+      const income = (data.ingresoVentas[i]||0) * (1+pct);
+      const expense = data.totalEgresos[i]||0;
+      if(i===0) balance = data.saldoRemanente[0];
+      else balance = projected[i-1] + income - expense;
+      projected.push(Math.round(balance*100)/100);
+    }
+    data.scenarios[label] = projected;
+  }
+
+  return data;
+}
+
+// ===================== RENDER =====================
+function render(){
+  if(!D)return;
+  destroyAll();
+  const labels=D.dates.map(fW);
+  const n=D.numWeeks;
+
+  // KPIs
+  const saldo=D.saldoFin[0];
+  const el1=document.getElementById('k1');el1.textContent=fA(saldo);el1.className='kpi-val '+(saldo>=0?'pos':'neg');
+  document.getElementById('k1s').textContent='Semana '+fD(D.dates[0]);
+
+  const ing=D.ingresoVentas[0];
+  document.getElementById('k2').textContent=fA(ing);document.getElementById('k2').className='kpi-val pos';
+  document.getElementById('k2s').textContent='Ventas estimadas';
+
+  const egr=D.totalEgresos[Math.min(1,n-1)];
+  const el3=document.getElementById('k3');el3.textContent=fA(egr);el3.className='kpi-val neg';
+  document.getElementById('k3s').textContent='Semana '+fD(D.dates[Math.min(1,n-1)]);
+
+  const avgE=D.totalEgresos.reduce((a,b)=>a+b,0)/n;
+  const avgI=D.ingresoVentas.reduce((a,b)=>a+b,0)/n;
+  const burn=avgE-avgI;
+  const cash=Math.max(0,D.saldoRemanente[0]);
+  const runway=burn>0?Math.max(0,Math.floor(cash/burn)):n;
+  const el4=document.getElementById('k4');el4.textContent=runway+' sem';
+  el4.className='kpi-val '+(runway>8?'pos':runway>4?'':'neg');
+  document.getElementById('k4s').textContent='Burn: '+fA(burn)+'/sem';
+
+  // ---- CHART 1: Saldo evolution ----
+  const ctx1=document.getElementById('c1').getContext('2d');
+  const g1=ctx1.createLinearGradient(0,0,0,280);g1.addColorStop(0,'rgba(220,38,38,.12)');g1.addColorStop(1,'rgba(220,38,38,0)');
+  charts.c1=new Chart(ctx1,{type:'line',data:{labels,datasets:[
+    {label:'Saldo Post-Pagos',data:D.saldoPostPagos,borderColor:'#dc2626',backgroundColor:g1,
+      borderWidth:2.5,fill:true,tension:.3,pointRadius:2,pointBackgroundColor:'#dc2626',pointBorderColor:'#fff',pointBorderWidth:2,pointHoverRadius:5},
+    {label:'Saldo Bancario Fin',data:D.saldoFin,borderColor:'#2563eb',borderWidth:1.5,borderDash:[5,3],fill:false,tension:.3,pointRadius:0}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top',align:'end'}},
+    scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false}}}}});
+
+  // ---- CHART 2: Ingresos vs Egresos ----
+  charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{labels,datasets:[
+    {label:'Ingresos',data:D.ingresoVentas,backgroundColor:'rgba(5,150,105,.6)',borderColor:'#059669',borderWidth:1,borderRadius:3},
+    {label:'Egresos',data:D.totalEgresos.map(v=>-v),backgroundColor:'rgba(220,38,38,.6)',borderColor:'#dc2626',borderWidth:1,borderRadius:3}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:{...TT,callbacks:{label:c=>c.dataset.label+': '+fF(Math.abs(c.raw))}},
+    legend:{position:'top',align:'end'}},scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(Math.abs(v))}},x:{grid:{display:false},ticks:{maxRotation:45}}}}});
+
+  // ---- CHART 3: Donut ----
+  const cats=Object.entries(D.catTotals).sort((a,b)=>b[1]-a[1]);
+  const dClr=['#dc2626','#059669','#2563eb','#d97706','#7c3aed','#0891b2','#ea580c','#16a34a','#db2777','#4f46e5',
+    '#ca8a04','#0d9488','#3b82f6','#9333ea','#c026d3','#e11d48','#14b8a6','#65a30d','#64748b'];
+  charts.c3=new Chart(document.getElementById('c3'),{type:'doughnut',data:{labels:cats.map(e=>e[0]),
+    datasets:[{data:cats.map(e=>e[1]),backgroundColor:dClr.slice(0,cats.length),borderColor:'#fff',borderWidth:2,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{
+      legend:{position:'right',labels:{font:{size:9},padding:6,color:'#4a5568'}},
+      tooltip:{...TT,callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);
+        return c.label+': '+fF(c.raw)+' ('+((c.raw/t)*100).toFixed(1)+'%)'}}}}}});
+
+  // ---- CHART 4: Banks ----
+  charts.c4=new Chart(document.getElementById('c4'),{type:'line',data:{labels,datasets:[
+    {label:'Supervielle C/C',data:D.supervielle,borderColor:'#059669',backgroundColor:'rgba(5,150,105,.06)',borderWidth:2,fill:true,tension:.3,pointRadius:1},
+    {label:'ICBC',data:D.icbc,borderColor:'#dc2626',backgroundColor:'rgba(220,38,38,.06)',borderWidth:2,fill:true,tension:.3,pointRadius:1},
+    {label:'BAPRO Haedo',data:D.bapro,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.06)',borderWidth:2,fill:true,tension:.3,pointRadius:1}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top',align:'end'}},
+    scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false}}}}});
+
+  // ---- CHART 5: Scenarios ----
+  const scLeg=document.getElementById('scLegend');scLeg.innerHTML='';
+  const scDS=SCENARIO_LABELS.map((lbl,i)=>{
+    const dot=document.createElement('div');dot.className='sc-item';
+    dot.innerHTML=`<div class="sc-dot" style="background:${SCENARIO_COLORS[i]}"></div>${lbl}`;
+    scLeg.appendChild(dot);
+    return{label:lbl,data:D.scenarios[lbl],borderColor:SCENARIO_COLORS[i],
+      borderWidth:i===0?2.5:1.8,borderDash:i===0?[]:[4,3],fill:false,tension:.3,
+      pointRadius:i===0?2:0,pointHoverRadius:4};
+  });
+  // Zero line
+  scDS.push({label:'Break-even',data:labels.map(()=>0),borderColor:'rgba(0,0,0,.12)',
+    borderWidth:1,borderDash:[2,4],fill:false,pointRadius:0});
+  charts.c5=new Chart(document.getElementById('c5'),{type:'line',data:{labels,datasets:scDS},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{tooltip:TT,legend:{display:false}},
+      scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false}}}}});
+
+  // Scenario KPIs
+  const avgIng=D.ingresoVentas.reduce((a,b)=>a+b,0)/n;
+  document.getElementById('scBase').textContent=fA(avgIng);
+  const baseEnd=D.scenarios['Base'][n-1];
+  const best30=D.scenarios['+ 30%'][n-1];
+  const worstBase=Math.min(...D.scenarios['Base']);
+  document.getElementById('scBest').textContent=fA(best30);
+  document.getElementById('scBest').className='kpi-val '+(best30>=0?'pos':'neg');
+  document.getElementById('scWorst').textContent=fA(worstBase);
+  // Break-even: find the % increase needed to end at 0
+  let bePct=null;
+  for(let p=0;p<=100;p++){
+    let bal=D.saldoRemanente[0];
+    for(let i=1;i<n;i++){bal=bal+(D.ingresoVentas[i]*(1+p/100))-D.totalEgresos[i];}
+    if(bal>=0){bePct=p;break;}
+  }
+  document.getElementById('scBE').textContent=bePct!==null?('+'+bePct+'%'):'> +100%';
+  document.getElementById('scBE').className='kpi-val '+(bePct!==null&&bePct<=30?'pos':'neg');
+  document.getElementById('scBEs').textContent=bePct!==null?('Sobre ingresos actuales'):'No alcanza con +100%';
+
+  // Scenario comparison table with absolute values
+  const scTbody=document.querySelector('#tblScenarios tbody');scTbody.innerHTML='';
+  SCENARIO_LABELS.forEach((lbl,i)=>{
+    const pct=SCENARIO_PCTS[i];
+    const weeklyAvg=avgIng*(1+pct);
+    const additional=avgIng*pct;
+    const finalBal=D.scenarios[lbl][n-1];
+    const diffVsBase=finalBal-D.scenarios['Base'][n-1];
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:${SCENARIO_COLORS[i]};font-family:'Instrument Sans';font-weight:700">${lbl}</td>
+      <td>${pct===0?'—':(pct*100).toFixed(0)+'%'}</td>
+      <td style="color:var(--t1);font-weight:600">${fF(weeklyAvg)}</td>
+      <td>${pct===0?'—':'+'+fF(additional)}</td>
+      <td class="${finalBal>=0?'pos':'neg'}" style="font-weight:600">${fF(finalBal)}</td>
+      <td>${i===0?'—':'+'+fF(diffVsBase)}</td>`;
+    scTbody.appendChild(tr);
+  });
+
+  // ---- CHART 6: Cumulative impact ----
+  const baseLine=D.scenarios['Base'];
+  const impactData=SCENARIO_LABELS.slice(1).map(lbl=>{
+    const sc=D.scenarios[lbl];
+    return sc[n-1]-baseLine[n-1];
+  });
+  charts.c6=new Chart(document.getElementById('c6'),{type:'bar',data:{
+    labels:SCENARIO_LABELS.slice(1),
+    datasets:[{label:'Ganancia vs Base',data:impactData,
+      backgroundColor:SCENARIO_COLORS.slice(1).map(c=>c+'88'),
+      borderColor:SCENARIO_COLORS.slice(1),borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{tooltip:{...TT,callbacks:{label:c=>'Diferencia: '+fF(c.raw)}},legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},y:{grid:{display:false}}}}});
+
+  // ---- CHART SC2: Income comparison bars ----
+  const scIncomeData=SCENARIO_LABELS.map((_,i)=>Math.round(avgIng*(1+SCENARIO_PCTS[i])));
+  charts.cSC2=new Chart(document.getElementById('cSC2'),{type:'bar',data:{
+    labels:SCENARIO_LABELS,
+    datasets:[{label:'Ingreso Semanal Promedio',data:scIncomeData,
+      backgroundColor:SCENARIO_COLORS.map(c=>c+'88'),borderColor:SCENARIO_COLORS,borderWidth:1.5,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{tooltip:{...TT,callbacks:{label:c=>c.dataset.label+': '+fF(c.raw)+'/sem'}},legend:{display:false}},
+      scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)},beginAtZero:true},x:{grid:{display:false}}}}});
+
+  // ---- CHART 7: Modelo ----
+  if(D.modeloDates.length>0){
+    const mLabels=D.modeloDates.map(fW);
+    const ctx7=document.getElementById('c7').getContext('2d');
+    const g7=ctx7.createLinearGradient(0,0,0,360);g7.addColorStop(0,'rgba(124,58,237,.12)');g7.addColorStop(1,'rgba(124,58,237,0)');
+    charts.c7=new Chart(ctx7,{type:'line',data:{labels:mLabels,datasets:[
+      {label:'Modelo',data:D.modeloVals,borderColor:'#7c3aed',backgroundColor:g7,borderWidth:2.5,fill:true,tension:.4,pointRadius:0,pointHoverRadius:4}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top',align:'end'}},
+      scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false},ticks:{maxTicksLimit:12}}}}});
+  }
+
+  // ---- CHART 8: Real vs Modelo ----
+  if(D.modeloVals.length>=n){
+    charts.c8=new Chart(document.getElementById('c8'),{type:'line',data:{labels,datasets:[
+      {label:'Real Post-Pagos',data:D.saldoPostPagos,borderColor:'#dc2626',borderWidth:2.5,tension:.3,pointRadius:3,pointBackgroundColor:'#dc2626',pointBorderColor:'#fff',pointBorderWidth:2},
+      {label:'Modelo',data:D.modeloVals.slice(0,n),borderColor:'#7c3aed',borderWidth:2,borderDash:[6,3],tension:.4,pointRadius:0}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top',align:'end'}},
+      scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false}}}}});
+  }
+
+  // ---- CHART PR1: Modelo vs Escenarios overlay ----
+  const scLeg2=document.getElementById('scLegend2');scLeg2.innerHTML='';
+  const prDS=[{label:'Modelo Base',data:D.modeloVals.slice(0,n),borderColor:'#7c3aed',
+    borderWidth:3,tension:.4,pointRadius:0,fill:false}];
+  {const dot=document.createElement('div');dot.className='sc-item';
+    dot.innerHTML='<div class="sc-dot" style="background:#7c3aed"></div>Modelo Base';scLeg2.appendChild(dot);}
+  SCENARIO_LABELS.forEach((lbl,i)=>{
+    const dot=document.createElement('div');dot.className='sc-item';
+    dot.innerHTML=`<div class="sc-dot" style="background:${SCENARIO_COLORS[i]}"></div>${lbl}: ${fA(avgIng*(1+SCENARIO_PCTS[i]))}/sem`;
+    scLeg2.appendChild(dot);
+    prDS.push({label:lbl,data:D.scenarios[lbl],borderColor:SCENARIO_COLORS[i],
+      borderWidth:i===0?2:1.5,borderDash:i===0?[]:[4,3],fill:false,tension:.3,pointRadius:0});
+  });
+  prDS.push({label:'Break-even',data:labels.map(()=>0),borderColor:'rgba(0,0,0,.12)',
+    borderWidth:1,borderDash:[2,4],fill:false,pointRadius:0});
+  charts.cPR1=new Chart(document.getElementById('cPR1'),{type:'line',data:{labels,datasets:prDS},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{tooltip:TT,legend:{display:false}},
+      scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false}}}}});
+
+  // ---- CHART 9: Top 5 expenses stacked ----
+  const expSums=Object.entries(D.expenses).map(([k,v])=>[k,v.reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const t5Clr=['#dc2626','#059669','#2563eb','#d97706','#7c3aed'];
+  charts.c9=new Chart(document.getElementById('c9'),{type:'bar',data:{labels,
+    datasets:expSums.map(([name],i)=>({label:name,data:D.expenses[name],
+      backgroundColor:t5Clr[i]+'88',borderColor:t5Clr[i],borderWidth:1,borderRadius:2}))},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top'}},
+      scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},
+        y:{stacked:true,grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}}}}});
+
+  // Expense table with weekly averages
+  const tbody=document.querySelector('#tbl tbody');tbody.innerHTML='';
+  const gTotal=cats.reduce((s,e)=>s+e[1],0);const maxV=cats[0]?cats[0][1]:1;
+  cats.forEach(([name,val])=>{
+    const pct=((val/gTotal)*100).toFixed(1);
+    const bw=((val/maxV)*100).toFixed(1);
+    const weeklyAvg=val/n;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:var(--t1);font-family:'Instrument Sans';font-weight:600">${name}</td>
+      <td style="color:var(--t1)">${fF(val)}</td>
+      <td style="color:var(--t2)">${fF(weeklyAvg)}</td>
+      <td>${pct}%</td>
+      <td><div class="bar-bg"><div class="bar-fi" style="width:${bw}%"></div></div></td>`;
+    tbody.appendChild(tr);
+  });
+
+  // ---- CHART EG1: Weekly average horizontal bars ----
+  const egAvgClr=['#dc2626','#059669','#2563eb','#d97706','#7c3aed','#0891b2','#ea580c','#16a34a','#db2777','#4f46e5',
+    '#ca8a04','#0d9488','#3b82f6','#9333ea','#c026d3','#e11d48','#14b8a6','#65a30d','#64748b'];
+  charts.cEG1=new Chart(document.getElementById('cEG1'),{type:'bar',data:{
+    labels:cats.map(e=>e[0]),
+    datasets:[{label:'Promedio Semanal',data:cats.map(e=>Math.round(e[1]/n)),
+      backgroundColor:egAvgClr.slice(0,cats.length).map(c=>c+'88'),
+      borderColor:egAvgClr.slice(0,cats.length),borderWidth:1,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+      plugins:{tooltip:{...TT,callbacks:{label:c=>c.dataset.label+': '+fF(c.raw)+'/sem'}},legend:{display:false}},
+      scales:{x:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},
+        y:{grid:{display:false},ticks:{font:{size:9}}}}}});
+
+  // ---- PAGOS PREVISTOS TAB ----
+  if(D.ppCatByWeek){
+    const ppCats=Object.entries(D.ppCatByWeek).map(([k,v])=>[k,v.reduce((a,b)=>a+b,0)]).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+    const ppGrand=ppCats.reduce((s,e)=>s+e[1],0);
+    const ppClr=['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2','#ea580c','#16a34a','#db2777'];
+
+    // KPIs
+    document.getElementById('ppTotal').textContent=fA(ppGrand);
+    const vivTotal=['Alquiler Vivienda','Expensas','Servicios (Electricidad)','Servicios (Gas)','Servicios (TV/Internet)','Tasas Municipales']
+      .reduce((s,k)=>{const e=ppCats.find(x=>x[0]===k);return s+(e?e[1]:0);},0);
+    document.getElementById('ppViv').textContent=fA(vivTotal);
+    const tarjTotal=['Tarjetas ARS','Tarjetas USD'].reduce((s,k)=>{const e=ppCats.find(x=>x[0]===k);return s+(e?e[1]:0);},0);
+    document.getElementById('ppTarj').textContent=fA(tarjTotal);
+    const provTotal=ppCats.find(x=>x[0]==='Proveedores');
+    document.getElementById('ppProv').textContent=fA(provTotal?provTotal[1]:0);
+    // Count supplier items
+    const provItems=(D.ppItems||[]).filter(p=>p.cat==='Proveedores');
+    document.getElementById('ppProvS').textContent=provItems.length+' pagos programados';
+
+    // Donut
+    charts.cPP1=new Chart(document.getElementById('cPP1'),{type:'doughnut',data:{
+      labels:ppCats.map(e=>e[0]),
+      datasets:[{data:ppCats.map(e=>e[1]),backgroundColor:ppClr.slice(0,ppCats.length),borderColor:'#fff',borderWidth:2,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{
+        legend:{position:'right',labels:{font:{size:9},padding:6,color:'#4a5568'}},
+        tooltip:{...TT,callbacks:{label:c=>{const t=c.dataset.data.reduce((a,b)=>a+b,0);
+          return c.label+': '+fF(c.raw)+' ('+((c.raw/t)*100).toFixed(1)+'%)'}}}}}});
+
+    // Stacked bars
+    charts.cPP2=new Chart(document.getElementById('cPP2'),{type:'bar',data:{labels,
+      datasets:ppCats.map(([name],i)=>({label:name,data:D.ppCatByWeek[name],
+        backgroundColor:ppClr[i%ppClr.length]+'88',borderColor:ppClr[i%ppClr.length],borderWidth:1,borderRadius:2}))},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top',labels:{font:{size:9}}}},
+        scales:{x:{stacked:true,grid:{display:false},ticks:{maxRotation:45}},
+          y:{stacked:true,grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}}}}});
+
+    // Lines by category
+    const ppTop=ppCats.slice(0,6);
+    charts.cPP3=new Chart(document.getElementById('cPP3'),{type:'line',data:{labels,
+      datasets:ppTop.map(([name],i)=>({label:name,data:D.ppCatByWeek[name],
+        borderColor:ppClr[i%ppClr.length],borderWidth:2,tension:.3,pointRadius:2,pointHoverRadius:4,fill:false}))},
+      options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+        plugins:{tooltip:TT,legend:{position:'top',labels:{font:{size:9}}}},
+        scales:{y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},x:{grid:{display:false}}}}});
+
+    // ---- Supplier detail chart + table ----
+    if(provItems.length>0){
+      // Group suppliers by description (clean name)
+      const suppMap={};
+      provItems.forEach(p=>{
+        const name=p.desc.replace(/^\d{2}\/\d{2}\s*/,'').trim()||'Sin descripción';
+        if(!suppMap[name])suppMap[name]={total:0,items:[]};
+        suppMap[name].total+=p.amount;
+        suppMap[name].items.push(p);
+      });
+      const suppArr=Object.entries(suppMap).sort((a,b)=>b[1].total-a[1].total);
+      const suppClr=['#dc2626','#2563eb','#059669','#d97706','#7c3aed','#0891b2','#ea580c','#16a34a'];
+
+      // Supplier bar chart
+      charts.cPP4=new Chart(document.getElementById('cPP4'),{type:'bar',data:{
+        labels:suppArr.map(e=>e[0]),
+        datasets:[{label:'Monto Total',data:suppArr.map(e=>Math.round(e[1].total)),
+          backgroundColor:suppClr.slice(0,suppArr.length).map(c=>c+'88'),
+          borderColor:suppClr.slice(0,suppArr.length),borderWidth:1,borderRadius:4}]},
+        options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+          plugins:{tooltip:{...TT,callbacks:{label:c=>fF(c.raw)}},legend:{display:false}},
+          scales:{x:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},y:{grid:{display:false}}}}});
+
+      // Supplier detail table
+      const provTbody=document.querySelector('#tblProveedores tbody');provTbody.innerHTML='';
+      provItems.sort((a,b)=>b.amount-a.amount).forEach(p=>{
+        const tr=document.createElement('tr');
+        const weekLabel=D.dates[p.ci]?fD(D.dates[p.ci]):'—';
+        tr.innerHTML=`<td style="color:var(--t1);font-weight:600">${p.desc.replace(/^\d{2}\/\d{2}\s*/,'').trim()||'—'}</td>
+          <td>Sem ${weekLabel}</td>
+          <td style="color:var(--t1);font-weight:600">${fF(p.amount)}</td>
+          <td style="color:var(--t3)">${p.bank||'—'}</td>`;
+        provTbody.appendChild(tr);
+      });
+    }
+
+    // Summary table with averages
+    const ppTbody=document.querySelector('#tblPP tbody');ppTbody.innerHTML='';
+    const ppMaxV=ppCats[0]?ppCats[0][1]:1;
+    ppCats.forEach(([name,val])=>{
+      const pct=((val/ppGrand)*100).toFixed(1);
+      const bw=((val/ppMaxV)*100).toFixed(1);
+      const weeksActive=D.ppCatByWeek[name].filter(v=>v>0).length;
+      const weeklyAvg=val/n;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td style="color:var(--t1);font-family:'Instrument Sans';font-weight:600">${name}</td>
+        <td style="color:var(--t1)">${fF(val)}</td>
+        <td style="color:var(--t2)">${fF(weeklyAvg)}</td>
+        <td>${pct}%</td>
+        <td><div class="bar-bg"><div class="bar-fi" style="width:${bw}%"></div></div></td>
+        <td>${weeksActive} de ${n}</td>`;
+      ppTbody.appendChild(tr);
+    });
+
+    // Detailed breakdown table of ALL items
+    const ppDetailTbody=document.querySelector('#tblPPDetail tbody');ppDetailTbody.innerHTML='';
+    const allItems=(D.ppItems||[]).filter(p=>p.amount>0).sort((a,b)=>{
+      if(a.ci!==b.ci)return a.ci-b.ci;
+      return b.amount-a.amount;
+    });
+    allItems.forEach(p=>{
+      const tr=document.createElement('tr');
+      const weekLabel=D.dates[p.ci]?fD(D.dates[p.ci]):'—';
+      tr.innerHTML=`<td>Sem ${weekLabel}</td>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;background:${ppClr[ppCats.findIndex(c=>c[0]===p.cat)%ppClr.length]||'#64748b'}"></span>${p.cat}</td>
+        <td style="color:var(--t1)">${p.desc||'—'}</td>
+        <td style="color:var(--t3)">${p.bank||'—'}</td>
+        <td style="color:var(--t1);font-weight:600">${fF(p.amount)}</td>`;
+      ppDetailTbody.appendChild(tr);
+    });
+  }
+
+  document.getElementById('upd').textContent=new Date().toLocaleString('es-AR');
+}
+
+// ===================== FILE HANDLER =====================
+async function processFile(ab){
+  showLoading('Procesando CASHFLOW…');
+  try{
+    const wb=XLSX.read(ab,{type:'array',cellDates:true});
+    D=parseWorkbook(wb);
+    render();
+    setStatus('ok','Datos cargados · '+D.numWeeks+' semanas');
+  }catch(e){
+    console.error(e);alert('Error: '+e.message);
+    setStatus('err','Error al procesar');
+  }finally{hideLoading();}
+}
+
+document.getElementById('fi').addEventListener('change',async function(e){
+  const f=e.target.files[0];if(!f)return;
+  const ab=await f.arrayBuffer();
+  await processFile(ab);
+  e.target.value='';
+});
+
+// ===================== ONEDRIVE FETCH =====================
+function encodeShareUrl(url){
+  const b64=btoa(url).replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
+  return 'u!'+b64;
+}
+
+async function fetchOneDrive(){
+  const btn=document.getElementById('btnOD');
+  btn.classList.add('act');
+  setODStatus('loading','Descargando…');
+  showLoading('Conectando a OneDrive…');
+
+  try{
+    // Method 1: Microsoft Graph shares API
+    const token=encodeShareUrl(ONEDRIVE_SHARE_URL);
+    const apiUrl=`https://api.onedrive.com/v1.0/shares/${token}/root/content`;
+
+    let resp=await fetch(apiUrl,{redirect:'follow'}).catch(()=>null);
+
+    if(!resp||!resp.ok){
+      // Method 2: Try direct download URL pattern
+      const dlUrl='https://onedrive.live.com/download?resid=B796724014EC33B5!109185';
+      resp=await fetch(dlUrl,{redirect:'follow'}).catch(()=>null);
+    }
+
+    if(!resp||!resp.ok){
+      throw new Error('CORS bloqueado. Usá el botón "Cargar .xlsx" para subir el archivo manualmente.');
+    }
+
+    const ab=await resp.arrayBuffer();
+    if(ab.byteLength<500)throw new Error('Archivo vacío o respuesta inválida');
+    await processFile(ab);
+    setODStatus('ok','OneDrive ✓');
+  }catch(e){
+    console.warn('OneDrive:',e.message);
+    setODStatus('err','Manual requerido');
+    hideLoading();
+    // Show helpful message
+    const msg=`No se pudo conectar automáticamente a OneDrive (restricción CORS del navegador).\n\nUsá el botón "Cargar .xlsx" para actualizar manualmente.\n\n💡 Tip: Para auto-refresh, abrí el HTML desde un servidor local (Live Server de VS Code).`;
+    if(!D) alert(msg); // Only alert if no data loaded yet
+  }finally{
+    btn.classList.remove('act');
+  }
+}
+
+// ===================== UI HELPERS =====================
+function showLoading(t){document.getElementById('ovTxt').textContent=t||'Procesando…';
+  document.getElementById('ov').classList.add('on');}
+function hideLoading(){document.getElementById('ov').classList.remove('on');}
+function setStatus(type,txt){
+  const dot=document.getElementById('dot');const st=document.getElementById('stTxt');
+  st.textContent=txt;
+  dot.style.background=type==='ok'?'var(--grn)':type==='err'?'var(--red)':'var(--amb)';
+  dot.style.boxShadow=`0 0 6px ${type==='ok'?'var(--grn)':type==='err'?'var(--red)':'var(--amb)'}`;
+}
+function setODStatus(type,txt){
+  const el=document.getElementById('odStatus');
+  el.className='od-status '+type;el.textContent=txt;
+}
+
+// ===================== TABS =====================
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tc').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
+    setTimeout(()=>Object.values(charts).forEach(c=>c&&c.resize()),60);
+  });
+});
+
+// ===================== STARTUP =====================
+(function(){
+  // Embedded fallback data from last upload (renders instantly)
+  D={
+    dates:["2026-03-02","2026-03-09","2026-03-16","2026-03-23","2026-03-30","2026-04-06","2026-04-13","2026-04-20","2026-04-27","2026-05-04","2026-05-11","2026-05-18","2026-05-25","2026-06-01","2026-06-08","2026-06-15","2026-06-22","2026-06-29","2026-07-06","2026-07-13","2026-07-20","2026-07-27"],
+    numWeeks:22,
+    saldoInicio:[2092492.65,352186.28,-1913533.38,-2465524.79,-3921959.94,-8308365.53,-9312578.81,-9806495.97,-9806495.97,-10272034.39,-10737572.81,-11668649.65,-11668649.65,-12168190.79,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07],
+    saldoFin:[352186.28,-1913533.38,-2465524.79,-3921959.94,-8308365.53,-9312578.81,-9806495.97,-9806495.97,-10272034.39,-10737572.81,-11668649.65,-11668649.65,-12168190.79,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07,-13167273.07],
+    saldoRemanente:[2092492.65,-1251316.17,-7279955.6,-5265161.79,-4415228.46,-7495839.23,-8902963.38,-13180784.76,-11749384.96,-12012070.75,-12930520.0,-15171941.64,-13317543.76,-11762047.38,-13267970.86,-16449914.73,-14594002.23,-12689722.02,-11634127.74,-12023321.76,-12999384.56,-10544986.68],
+    ingresoVentas:[522349.43,2984853.87,2984853.87,2686368.49,2537125.79,2984853.87,2984853.87,2984853.87,2686368.49,2984853.87,2984853.87,2984853.87,2686368.49,2984853.87,2984853.87,2686368.49,2835611.18,2984853.87,2686368.49,2984853.87,2984853.87,2984853.87],
+    cajaMedia:[522349.43,497475.65,497475.65,447728.08,422854.3,497475.65,497475.65,497475.65,447728.08,497475.65,497475.65,497475.65,447728.08,497475.65,497475.65,447728.08,472601.86,497475.65,447728.08,497475.65,497475.65,497475.65],
+    supervielle:[166603.57,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61,222507.61],
+    icbc:[-1361014.6,-3682638.3,-4234629.71,-5691064.86,-10077470.45,-11081683.73,-11575600.89,-11575600.89,-12041139.31,-12506677.73,-13437754.57,-13437754.57,-13937295.71,-14936377.99,-14936377.99,-14936377.99,-14936377.99,-14936377.99,-14936377.99,-14936377.99,-14936377.99,-14936377.99],
+    bapro:[1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31,1546597.31],
+    saldoPostPagos:[-1251316.17,-7279955.6,-5265161.79,-4415228.46,-7495839.23,-8902963.38,-13180784.76,-11749384.96,-12012070.75,-12930520.0,-15171941.64,-13317543.76,-11762047.38,-13267970.86,-16449914.73,-14594002.23,-12689722.02,-11634127.74,-12023321.76,-12999384.56,-10544986.68,-8791463.78],
+    bancosVenc:[1740306.37,2265719.66,551991.41,1456435.15,4386405.59,1004213.28,493917.16,0,465538.42,465538.42,931076.84,0,499541.14,999082.28,0,0,0,0,0,0,0,0],
+    pagosEfectivo:[1805597.66,2208559.06,311022.26,0,166578.13,1032426.23,3451565.54,722998.08,2018763.02,1032426.19,1041191.04,0,166578.13,2472940.85,1058568.82,0,166578.13,949259.59,404240,765358.79,0,166578.13],
+    totalEgresos:[3072851.87,6747773.65,541478.25,380000,1231330.97,3387764.74,6768758.1,1553454.07,2483515.86,3437764.7,4295198.67,1130455.99,631330.97,3491695.06,6166797.74,830455.99,931330.97,1929259.59,3075562.51,3960916.67,530455.99,1231330.97],
+    catTotals:{"Pagos Previstos":19941229.67,"Sueldos y Salarios":8158500,"Préstamo BAPRO":8555479.42,"Alquiler Gaona":6400000,"Seg. & Higiene":4200000,"Medicus":2211131.48,"IIBB":1400000,"Seg. Vehículos":971648,"AFIP (IVA)":900000,"AFIP (Autónomos)":838906.38,"Móviles":781259.05,"Seg. Fed. Patronal":709648,"Electricidad":642505.15,"Sistema Gestión":442860,"Contaduría":325000,"Teléfono Fijo":285265.2,"ARCA Plan Pagos":252279.95,"Cargas Sociales":600000,"Gastos Bancarios":193771.05},
+    expenses:{
+      "Pagos Previstos":[1805597.66,2208559.06,311022.26,0,166578.13,1032426.23,3451565.54,722998.08,2018763.02,1032426.19,1041191.04,0,166578.13,2472940.85,1058568.82,0,166578.13,949259.59,404240,765358.79,0,166578.13],
+      "Sueldos y Salarios":[1228500,180000,180000,180000,180000,930000,180000,180000,180000,980000,180000,180000,180000,980000,180000,180000,180000,980000,180000,180000,180000,180000],
+      "Préstamo BAPRO":[0,1767808.21,0,0,0,0,1775513.69,0,0,0,1712328.76,0,0,0,1679965.75,0,0,0,0,1619863.01,0,0],
+      "Alquiler Gaona":[0,1200000,0,0,0,1200000,0,0,0,1200000,0,0,0,0,1400000,0,0,0,1400000,0,0,0],
+      "Seg. & Higiene":[0,600000,0,0,600000,0,0,600000,0,0,600000,0,0,0,600000,600000,0,0,600000,0,0,600000],
+      "Medicus":[0,0,0,0,0,0,552782.87,0,0,0,552782.87,0,0,0,552782.87,0,0,0,0,552782.87,0,0],
+      "IIBB":[0,0,0,200000,0,0,300000,0,0,0,300000,0,0,0,300000,0,0,0,300000,0,0,0],
+      "AFIP (IVA)":[0,0,0,0,0,0,0,0,300000,0,0,0,0,300000,0,0,0,0,300000,0,0,0],
+      "AFIP (Autónomos)":[0,580781.34,0,0,0,64531.26,0,0,0,64531.26,0,0,0,0,64531.26,0,0,0,64531.26,0,0,0]
+    },
+    modeloDates:["2026-03-02","2026-03-09","2026-03-16","2026-03-23","2026-03-30","2026-04-06","2026-04-13","2026-04-20","2026-04-27","2026-05-04","2026-05-11","2026-05-18","2026-05-25","2026-06-01","2026-06-08","2026-06-15","2026-06-22","2026-06-29","2026-07-06","2026-07-13","2026-07-20","2026-07-27"],
+    modeloVals:[-2215032.07,-3982972.85,-5608449.11,-7091460.83,-8432008.03,-9630090.7,-10685708.84,-11598862.46,-12369551.54,-12997776.09,-13483536.12,-13826831.62,-14027662.58,-14086029.02,-14001930.93,-13775368.32,-13406341.17,-12894849.49,-12240893.29,-11444472.55,-10505587.29,-9424237.5],
+    scenarios:{},
+    ppCatByWeek:{
+      "Proveedores":[693500,0,0,0,0,0,3204966.43,722998.08,1852184.89,0,0,0,0,1500000,0,0,0,0,0,652538.43,0,0],
+      "Alquiler Vivienda":[837203.83,0,0,0,0,837203.83,0,0,0,0,837203.83,0,0,837203.83,0,0,906740.31,0,0,0,0,0],
+      "Valentina (Personal)":[0,661617,0,0,0,0,0,678157.42,0,0,0,695111.36,0,0,0,712489.14,0,0,0,730301.37,0,0],
+      "Tarjetas ARS":[203635.27,1326015.76,0,0,0,152703.12,35057.42,0,0,0,152703,35057.42,0,93217.74,35057.42,0,77652,35057.42,0,128274.97,35057.42,0],
+      "Expensas":[0,0,270820.26,0,0,0,270820.26,0,0,0,270820.26,0,0,270820.26,0,0,0,270820.26,0,0,270820.26,0],
+      "Servicios (Electricidad)":[0,0,0,0,156541.4,0,0,0,156541.4,0,0,0,156541.4,0,0,156541.4,0,0,0,0,0,156541.4],
+      "Tarjetas USD":[28738.5,220926.3,0,0,0,0,0,12127.5,0,0,0,0,0,0,0,0,0,0,0,0,4454.1,0],
+      "Servicios (TV/Internet)":[42519.28,0,0,0,0,42519.28,0,0,0,0,42519.28,0,0,42519.28,0,0,42519.28,0,0,0,0,42519.28],
+      "Tasas Municipales":[0,0,40202,0,0,0,40202,0,0,0,40202,0,0,40202,0,0,0,0,40202,0,0,40202],
+      "Servicios (Gas)":[0,0,0,0,10036.73,0,0,0,10036.73,0,0,0,10036.73,0,0,10036.73,0,0,0,0,0,10036.73]
+    },
+    ppItems:[{"ci":0,"amount":82539.31,"desc":"2/3 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":1,"amount":1326015.76,"desc":"10/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":5,"amount":77652.04,"desc":"1/4 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":35057.42,"desc":"14/04 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":7,"amount":722998.08,"desc":"05/04 3 PACK","bank":"IN04/02 FXX/XX","cat":"Proveedores"},{"ci":8,"amount":652184.89,"desc":"25/04 ARTEPLAST","bank":"IN23/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":77652,"desc":"4/5 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":10,"amount":35057.42,"desc":"12/05 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":13,"amount":18166.66,"desc":"2/6 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":14,"amount":35057.42,"desc":"09/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":18,"amount":18166.66,"desc":"2/7 ARS JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":19,"amount":35057.42,"desc":"14/07 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":0,"amount":12156.9,"desc":"2/3 USD JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":1,"amount":220926.3,"desc":"10/03 USD ICBC VISA","bank":"ICBC","cat":"Tarjetas USD"},{"ci":0,"amount":118857.96,"desc":"2/3 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":652538.43,"desc":"09/04 SAIZ CAPUTO","bank":"IN10/02 F09/02","cat":"Proveedores"},{"ci":0,"amount":12127.5,"desc":"2/3 USD JM MC","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":5,"amount":37555.55,"desc":"1/4 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":1774790,"desc":"11/04 ROLANPLAST","bank":"IN19/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":37555.55,"desc":"4/5 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37555.55,"desc":"2/6 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37555.55,"desc":"2/7 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":2238.78,"desc":"2/3 VISA BAPRO","bank":"B PROVINCIA","cat":"Tarjetas ARS"},{"ci":5,"amount":37495.53,"desc":"1/4 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":9,"amount":37495.53,"desc":"4/5 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37495.53,"desc":"2/6 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37495.53,"desc":"2/7 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":4454.1,"desc":"2/3 US VIS JM","bank":"B PROVINCIA","cat":"Tarjetas USD"},{"ci":0,"amount":693500,"desc":"21/02 MIGUEL CORRUGADO","bank":"IN15/01F15/01","cat":"Proveedores"},{"ci":8,"amount":1200000,"desc":"25/04 SAIZ CAPUTO","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":13,"amount":1500000,"desc":"30/05 NARDONE","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":0,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":2,"amount":270820.26,"desc":"10/02 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":4,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":5,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":6,"amount":270820.26,"desc":"10/04 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":8,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":9,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":10,"amount":270820.26,"desc":"10/05 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":12,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":13,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":14,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":16,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":17,"amount":906740.31,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":18,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":21,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":0,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/03","cat":"Servicios (TV/Internet)"},{"ci":2,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":4,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":5,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/04","cat":"Servicios (TV/Internet)"},{"ci":6,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":8,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":9,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/05","cat":"Servicios (TV/Internet)"},{"ci":10,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":12,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":13,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/06","cat":"Servicios (TV/Internet)"},{"ci":14,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":16,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":17,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/07","cat":"Servicios (TV/Internet)"},{"ci":18,"amount":40202,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":21,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":1,"amount":661617,"desc":"10/03 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":6,"amount":678157.42,"desc":"10/04 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":10,"amount":695111.36,"desc":"10/05 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":14,"amount":712489.14,"desc":"10/06 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":19,"amount":730301.37,"desc":"10/07 VALENTINA","bank":"","cat":"Valentina (Personal)"}]
+  };
+  // Compute scenarios from embedded data
+  for(let si=0;si<SCENARIO_PCTS.length;si++){
+    const pct=SCENARIO_PCTS[si],lbl=SCENARIO_LABELS[si],proj=[];
+    for(let i=0;i<D.numWeeks;i++){
+      if(i===0){proj.push(D.saldoRemanente[0]);}
+      else{proj.push(Math.round((proj[i-1]+(D.ingresoVentas[i]*(1+pct))-D.totalEgresos[i])*100)/100);}
+    }
+    D.scenarios[lbl]=proj;
+  }
+  render();
+  setStatus('ok','Datos embebidos cargados');
+  // Then attempt OneDrive refresh
+  setTimeout(()=>fetchOneDrive(),1500);
+})();
+</script>
+</body>
+</html>
