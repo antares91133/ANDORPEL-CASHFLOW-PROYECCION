@@ -152,7 +152,7 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
       <div class="brand-sep"></div>
       <div>
         <div class="brand-title">DASHBOARD PROYECCIÓN CASHFLOW</div>
-        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Pulsar «Refrescar datos» o arrastrar .xlsx para actualizar</div>
+        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Datos automáticos desde OneDrive</div>
       </div>
     </div>
   </div>
@@ -164,9 +164,13 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
     <div class="hdr-r">
       <div class="dot" id="dot"></div>
       <span class="st" id="stTxt">Datos embebidos</span>
-      <button class="btn btn-primary" id="btnOD" onclick="document.getElementById('fi').click()" style="padding:9px 18px;font-size:13px;cursor:pointer;">
+      <button class="btn btn-primary" id="btnOD" onclick="refreshData()" style="padding:9px 18px;font-size:13px;cursor:pointer;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
         Refrescar datos
+      </button>
+      <button class="btn" onclick="document.getElementById('fi').click()" style="padding:9px 12px;font-size:12px;cursor:pointer;background:var(--bg);border:1px solid var(--brd);color:var(--t2);" title="Cargar archivo local">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        .xlsx
       </button>
       <input type="file" id="fi" accept=".xlsx,.xls" style="display:none">
     </div>
@@ -1255,6 +1259,16 @@ function render(){
 }
 
 // ===================== FILE HANDLER =====================
+async function refreshData(){
+  const btn=document.getElementById('btnOD');
+  btn.classList.add('act');btn.style.pointerEvents='none';
+  const ok=await loadFromOneDrive();
+  btn.classList.remove('act');btn.style.pointerEvents='';
+  if(!ok){
+    setStatus('err','No se pudo conectar a OneDrive · Cargá archivo manualmente');
+  }
+}
+
 async function processFile(ab){
   const btn=document.getElementById('btnOD');
   btn.classList.add('act');btn.style.pointerEvents='none';
@@ -1316,8 +1330,53 @@ document.querySelectorAll('.tab').forEach(tab=>{
 });
 
 // ===================== STARTUP =====================
-(function(){
-  // Embedded fallback data from last upload (renders instantly)
+const ONEDRIVE_RAW='https://api.onedrive.com/v1.0/shares/u!aHR0cHM6Ly8xZHJ2Lm1zL3gvYy9iNzk2NzI0MDE0ZWMzM2I1L0lRQzFNLXdVUUhLV0lJQzNnYW9CQUFBQUFmeTNZRmZkMzJUMFgzVDNYdGlvbGZzP2U9c3hJdll4/root/content';
+const CORS_PROXIES=[
+  url=>'https://corsproxy.io/?url='+encodeURIComponent(url),
+  url=>'https://api.allorigins.win/raw?url='+encodeURIComponent(url),
+  url=>'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(url)
+];
+
+async function loadFromOneDrive(){
+  setStatus('load','Conectando con OneDrive…');
+  showLoading('Descargando datos actualizados…');
+  for(let i=0;i<CORS_PROXIES.length;i++){
+    try{
+      const proxyUrl=CORS_PROXIES[i](ONEDRIVE_RAW);
+      const resp=await fetch(proxyUrl);
+      if(!resp.ok) continue;
+      const ab=await resp.arrayBuffer();
+      if(ab.byteLength<500) continue; // too small = error page
+      const wb=XLSX.read(ab,{type:'array',cellDates:true});
+      D=parseWorkbook(wb);
+      render();
+      setStatus('ok','Datos OneDrive · '+D.numWeeks+' semanas · '+new Date().toLocaleTimeString('es-AR'));
+      hideLoading();
+      return true;
+    }catch(e){console.warn('Proxy '+(i+1)+' falló:',e);}
+  }
+  hideLoading();
+  return false;
+}
+
+(async function(){
+  // 1) Try OneDrive auto-load
+  if(await loadFromOneDrive()) return;
+
+  // 2) Try data.xlsx from same repo (fallback)
+  try{
+    const resp=await fetch('data.xlsx?v='+Date.now());
+    if(resp.ok){
+      const ab=await resp.arrayBuffer();
+      const wb=XLSX.read(ab,{type:'array',cellDates:true});
+      D=parseWorkbook(wb);
+      render();
+      setStatus('ok','Datos repo · '+D.numWeeks+' semanas · '+new Date().toLocaleTimeString('es-AR'));
+      return;
+    }
+  }catch(e){console.warn('Repo fetch falló:',e);}
+
+  // 3) Fallback: embedded data
   D={
     dates:["2026-03-02","2026-03-09","2026-03-16","2026-03-23","2026-03-30","2026-04-06","2026-04-13","2026-04-20","2026-04-27","2026-05-04","2026-05-11","2026-05-18","2026-05-25","2026-06-01","2026-06-08","2026-06-15","2026-06-22","2026-06-29","2026-07-06","2026-07-13","2026-07-20","2026-07-27"],
     numWeeks:22,
@@ -1380,7 +1439,7 @@ document.querySelectorAll('.tab').forEach(tab=>{
     D.scenarios[lbl]=proj;
   }
   render();
-  setStatus('ok','Datos embebidos · Pulsar Refrescar para actualizar con último .xlsx');
+  setStatus('amb','Datos embebidos (fallback) · Verificá que data.xlsx esté en el repositorio');
 })();
 </script>
 </body>
