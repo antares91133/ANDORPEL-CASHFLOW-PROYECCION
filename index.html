@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ANDORPEL — Dashboard Proyección Cashflow</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -60,13 +61,6 @@ header h1 small{color:var(--t3);font-weight:400;font-size:12px;margin-left:8px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .btn-primary{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600;}
 .btn-primary:hover{opacity:.88;background:var(--navy);}
-
-/* ONEDRIVE STATUS */
-.od-status{display:flex;align-items:center;gap:6px;padding:4px 10px;
-  border-radius:5px;font-size:10px;font-family:'IBM Plex Mono',monospace;}
-.od-status.ok{background:var(--grn2);color:var(--grn);}
-.od-status.err{background:var(--red2);color:var(--red);}
-.od-status.loading{background:var(--amb2);color:var(--amb);}
 
 /* TABS */
 nav.tabs{display:flex;gap:3px;padding:10px 28px;border-bottom:1px solid var(--brd);background:rgba(255,255,255,.6);}
@@ -155,7 +149,7 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
       <div class="brand-sep"></div>
       <div>
         <div class="brand-title">DASHBOARD PROYECCIÓN CASHFLOW</div>
-        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Pulsar «Refrescar fuentes de OneDrive» o arrastrar .xlsx para actualizar</div>
+        <div class="brand-sub" style="color:rgba(255,255,255,.75);font-size:11px;font-weight:500;letter-spacing:.4px;">Panel de control en tiempo real · Pulsar «Refrescar datos» o arrastrar .xlsx para actualizar</div>
       </div>
     </div>
   </div>
@@ -165,16 +159,11 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
       <h1>Cash Flow <small>· ARS · Semanal</small></h1>
     </div>
     <div class="hdr-r">
-      <div class="od-status loading" id="odStatus">⏳ Intentando OneDrive…</div>
       <div class="dot" id="dot"></div>
-      <span class="st" id="stTxt">Inicializando</span>
-      <button class="btn" onclick="document.getElementById('fi').click()" style="opacity:.7;font-size:11px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
-        Cargar .xlsx
-      </button>
-      <button class="btn btn-primary" id="btnOD" onclick="fetchOneDrive()" style="padding:9px 18px;font-size:13px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Refrescar fuentes de OneDrive
+      <span class="st" id="stTxt">Datos embebidos</span>
+      <button class="btn btn-primary" id="btnOD" onclick="document.getElementById('fi').click()" style="padding:9px 18px;font-size:13px;cursor:pointer;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:15px;height:15px;"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        Refrescar datos
       </button>
       <input type="file" id="fi" accept=".xlsx,.xls" style="display:none">
     </div>
@@ -182,6 +171,7 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
 
   <nav class="tabs">
     <div class="tab active" data-tab="op">CASHFLOW OPERATIVO</div>
+    <div class="tab" data-tab="ch">CHEQUES ENTREGADOS</div>
     <div class="tab" data-tab="pp">PAGOS PREVISTOS</div>
     <div class="tab" data-tab="sc">ESCENARIOS DE INGRESO</div>
     <div class="tab" data-tab="pr">PROYECCIÓN EXTENDIDA</div>
@@ -214,6 +204,77 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
         <div class="cc fw"><div class="cc-t">Saldos por Banco</div>
           <div class="cc-s">Evolución semanal por entidad · ARS</div>
           <div class="ch h280"><canvas id="c4"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- TAB CHEQUES ENTREGADOS -->
+    <div class="tc" id="tab-ch">
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-ico">📋</div><div class="kpi-lbl">Total Cheques Pendientes</div>
+          <div class="kpi-val neg" id="chTotal">--</div><div class="kpi-sub" id="chTotalS">Pendientes de débito</div></div>
+        <div class="kpi"><div class="kpi-ico" style="filter:hue-rotate(200deg)">🏦</div><div class="kpi-lbl">Banco ICBC</div>
+          <div class="kpi-val" id="chICBC">--</div><div class="kpi-sub" id="chICBCs">cheques</div></div>
+        <div class="kpi"><div class="kpi-ico" style="filter:hue-rotate(90deg)">🏦</div><div class="kpi-lbl">Banco Provincia</div>
+          <div class="kpi-val" id="chBAPRO">--</div><div class="kpi-sub" id="chBAPROs">cheques</div></div>
+        <div class="kpi"><div class="kpi-ico">📅</div><div class="kpi-lbl">Próximo Vencimiento</div>
+          <div class="kpi-val" id="chNext">--</div><div class="kpi-sub" id="chNextS">fecha más cercana</div></div>
+      </div>
+      <div class="cg">
+        <!-- Evolución semanal apilada -->
+        <div class="cc"><div class="cc-t">Débitos Semanales por Banco</div>
+          <div class="cc-s">Barras apiladas ICBC + Provincia · ARS</div>
+          <div class="ch h320"><canvas id="cCH1"></canvas></div></div>
+        <!-- Timeline por día exacto -->
+        <div class="cc"><div class="cc-t">Timeline de Vencimientos</div>
+          <div class="cc-s">Cada cheque en su fecha exacta de débito · ARS</div>
+          <div class="ch h320"><canvas id="cCH2"></canvas></div></div>
+        <!-- Concentración por acreedor -->
+        <div class="cc fw"><div class="cc-t">Concentración por Acreedor</div>
+          <div class="cc-s">Monto total pendiente por beneficiario · ARS</div>
+          <div class="ch h280"><canvas id="cCH3"></canvas></div></div>
+
+        <!-- ICBC -->
+        <div class="cc fw">
+          <div class="cc-t">🏦 Banco ICBC · Cheques Pendientes de Débito</div>
+          <div class="cc-s" id="chICBCsub">Detalle individual ordenado por fecha de vencimiento</div>
+          <div style="overflow-x:auto;margin-top:10px;max-height:400px;overflow-y:auto;">
+            <table class="xtbl" id="tblChICBC"><thead>
+              <tr><th>Fecha Débito</th><th>Nº Cheque</th><th>Acreedor</th><th>Semana</th><th style="text-align:right">Importe ARS</th></tr>
+            </thead><tbody></tbody>
+            <tfoot><tr style="font-weight:700;background:var(--card2);">
+              <td colspan="4">TOTAL ICBC</td><td style="text-align:right" id="chICBCfoot">--</td>
+            </tr></tfoot></table>
+          </div>
+        </div>
+
+        <!-- BAPRO -->
+        <div class="cc fw">
+          <div class="cc-t">🏦 Banco Provincia · Cheques Pendientes de Débito</div>
+          <div class="cc-s" id="chBAPROsub">Detalle individual ordenado por fecha de vencimiento</div>
+          <div style="overflow-x:auto;margin-top:10px;max-height:400px;overflow-y:auto;">
+            <table class="xtbl" id="tblChBAPRO"><thead>
+              <tr><th>Fecha Débito</th><th>Nº Cheque</th><th>Acreedor</th><th>Semana</th><th style="text-align:right">Importe ARS</th></tr>
+            </thead><tbody></tbody>
+            <tfoot><tr style="font-weight:700;background:var(--card2);">
+              <td colspan="4">TOTAL PROVINCIA</td><td style="text-align:right" id="chBAPROfoot">--</td>
+            </tr></tfoot></table>
+          </div>
+        </div>
+
+        <!-- Resumen semanal consolidado -->
+        <div class="cc fw">
+          <div class="cc-t">Resumen Semanal Consolidado</div>
+          <div class="cc-s">Totales por semana y banco · ARS</div>
+          <div style="overflow-x:auto;margin-top:10px;">
+            <table class="xtbl" id="tblChWeekly"><thead>
+              <tr><th>Semana</th><th style="text-align:right">ICBC</th><th style="text-align:right">Provincia</th><th style="text-align:right">Total Semana</th><th>Distribución</th></tr>
+            </thead><tbody></tbody>
+            <tfoot><tr style="font-weight:700;background:var(--card2);">
+              <td>TOTAL GENERAL</td><td style="text-align:right" id="chWkICBC">--</td><td style="text-align:right" id="chWkBAPRO">--</td>
+              <td style="text-align:right" id="chWkTot">--</td><td></td>
+            </tr></tfoot></table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -366,7 +427,6 @@ body.drag-over::after{content:'Soltar archivo .xlsx aquí';position:fixed;inset:
 
 <script>
 // ===================== CONFIG =====================
-const ONEDRIVE_SHARE_URL = 'https://1drv.ms/x/c/b796724014ec33b5/IQC1M-wUQHKWIIC3gaoBAAAAAfy3YFfd32T0X3T3Xtiolfs?e=BZjvui';
 const SCENARIO_PCTS = [0, 0.05, 0.10, 0.15, 0.20, 0.30];
 const SCENARIO_LABELS = ['Base','+ 5%','+ 10%','+ 15%','+ 20%','+ 30%'];
 const SCENARIO_COLORS = ['#dc2626','#d97706','#059669','#2563eb','#7c3aed','#0891b2'];
@@ -382,6 +442,15 @@ function fF(n){if(n==null||isNaN(n))return'--';
   return new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:0,maximumFractionDigits:0}).format(n);}
 function fD(d){if(!d)return'';const p=d.split('-');return p[2]+'/'+p[1];}
 function fW(d){return'Sem '+fD(d);}
+// Parse cheque date "DD/MM" into Date using week year context
+function parseFechaChq(fecha,semana){
+  if(!fecha||!fecha.includes('/'))return new Date(semana||'2026-03-01');
+  const parts=fecha.split('/');
+  const day=parseInt(parts[0]),month=parseInt(parts[1]);
+  // Determine year from the week date context
+  const wy=semana?parseInt(semana.split('-')[0]):2026;
+  return new Date(wy,month-1,day);
+}
 
 // ===================== CHART DEFAULTS =====================
 Chart.defaults.color='#8896a8';
@@ -617,6 +686,53 @@ function parseWorkbook(wb) {
     data.ppCatByWeek[cat]=data.ppCatByWeek[cat].map(v=>Math.round(v*100)/100);
   }
   data.ppItems=ppItems;
+
+  // ---- PARSE CHEQUES ENTREGADOS ----
+  // ICBC: data rows 206-253, totals row 256
+  // BAPRO: data rows 263-307, totals row 310
+  function parseCheques(startR, endR, totalRow, banco){
+    const items=[];
+    let r=startR;
+    while(r<=endR){
+      let hasNum=false;
+      for(const c of dateCols){if(gvn(r,c)!==0){hasNum=true;break;}}
+      if(hasNum){
+        for(const c of dateCols){
+          const amt=gvn(r,c);
+          if(amt!==0){
+            const ci=dateCols.indexOf(c);
+            const info=String(gv(r+1,c)||'');
+            const acreedor=String(gv(r+2,c)||'');
+            // Parse date and cheque number from info "DD/MM CHEQUENUM"
+            const parts=info.split(/\s+/,2);
+            let fechaStr='',numCheque='';
+            if(parts.length>=1&&parts[0].includes('/')){
+              fechaStr=parts[0];
+              numCheque=parts.length>1?parts[1]:'';
+            }else{
+              numCheque=info;
+            }
+            items.push({banco,ci,importe:Math.round(amt*100)/100,
+              fecha:fechaStr,numCheque,acreedor:acreedor.trim(),
+              semana:dates[ci]||''});
+          }
+        }
+        r+=3;
+      }else{r++;}
+    }
+    const weeklyTotals=dateCols.map(c=>gvn(totalRow,c));
+    return{items,weeklyTotals};
+  }
+
+  const icbcCh=parseCheques(206,253,256,'ICBC');
+  const baproCh=parseCheques(263,307,310,'BAPRO');
+  data.cheques={
+    icbc:icbcCh.items,
+    bapro:baproCh.items,
+    icbcWeekly:icbcCh.weeklyTotals,
+    baproWeekly:baproCh.weeklyTotals,
+    allItems:[...icbcCh.items,...baproCh.items]
+  };
 
   // Total egresos per week
   data.totalEgresos = dateCols.map((_,i)=>{
@@ -880,6 +996,141 @@ function render(){
       scales:{x:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},
         y:{grid:{display:false},ticks:{font:{size:9}}}}}});
 
+  // ---- CHEQUES ENTREGADOS TAB ----
+  if(D.cheques){
+    const CH=D.cheques;
+    const icbcT=CH.icbc.reduce((s,c)=>s+c.importe,0);
+    const baproT=CH.bapro.reduce((s,c)=>s+c.importe,0);
+    const grandT=icbcT+baproT;
+
+    // KPIs
+    document.getElementById('chTotal').textContent=fA(grandT);
+    document.getElementById('chTotalS').textContent=CH.allItems.length+' cheques pendientes de débito';
+    document.getElementById('chICBC').textContent=fA(icbcT);
+    document.getElementById('chICBCs').textContent=CH.icbc.length+' cheques';
+    document.getElementById('chBAPRO').textContent=fA(baproT);
+    document.getElementById('chBAPROs').textContent=CH.bapro.length+' cheques';
+
+    // Next cheque date
+    const allSorted=[...CH.allItems].sort((a,b)=>{
+      const dA=parseFechaChq(a.fecha,a.semana),dB=parseFechaChq(b.fecha,b.semana);
+      return dA-dB;
+    });
+    const today=new Date();
+    const nextCh=allSorted.find(c=>parseFechaChq(c.fecha,c.semana)>=today);
+    if(nextCh){
+      document.getElementById('chNext').textContent=nextCh.fecha||fD(nextCh.semana);
+      document.getElementById('chNextS').textContent=nextCh.acreedor+' · '+fA(nextCh.importe);
+    }else{
+      document.getElementById('chNext').textContent='—';
+      document.getElementById('chNextS').textContent='Todos vencidos';
+    }
+
+    // CHART CH1: Stacked weekly bars
+    charts.cCH1=new Chart(document.getElementById('cCH1'),{type:'bar',data:{labels,datasets:[
+      {label:'ICBC',data:CH.icbcWeekly.map(v=>Math.round(v)),backgroundColor:'#2563eb88',borderColor:'#2563eb',borderWidth:1,borderRadius:3},
+      {label:'Provincia',data:CH.baproWeekly.map(v=>Math.round(v)),backgroundColor:'#059669aa',borderColor:'#059669',borderWidth:1,borderRadius:3}
+    ]},options:{responsive:true,maintainAspectRatio:false,plugins:{tooltip:TT,legend:{position:'top',align:'end'}},
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}}}}});
+
+    // CHART CH2: Timeline scatter by exact date
+    const chTimeData=CH.allItems.map(c=>{
+      const d=parseFechaChq(c.fecha,c.semana);
+      return{x:d.getTime(),y:c.importe,label:c.acreedor,num:c.numCheque,banco:c.banco,fecha:c.fecha};
+    }).sort((a,b)=>a.x-b.x);
+    const icbcPts=chTimeData.filter(c=>c.banco==='ICBC');
+    const baproPts=chTimeData.filter(c=>c.banco==='BAPRO');
+    charts.cCH2=new Chart(document.getElementById('cCH2'),{type:'scatter',data:{datasets:[
+      {label:'ICBC',data:icbcPts,backgroundColor:'#2563eb',borderColor:'#1d4ed8',pointRadius:7,pointHoverRadius:10,borderWidth:1.5},
+      {label:'Provincia',data:baproPts,backgroundColor:'#059669',borderColor:'#047857',pointRadius:7,pointHoverRadius:10,borderWidth:1.5}
+    ]},options:{responsive:true,maintainAspectRatio:false,
+      plugins:{tooltip:{...TT,callbacks:{
+        title:c=>{const p=c[0].raw;return(p.fecha||'')+' · '+p.label;},
+        label:c=>{const p=c.raw;return[p.banco+' · Cheque '+p.num,'Importe: '+fF(p.y)];}
+      }},legend:{position:'top',align:'end'}},
+      scales:{x:{type:'time',time:{unit:'day',displayFormats:{day:'dd/MM'},tooltipFormat:'dd/MM/yyyy'},
+        grid:{color:'rgba(226,230,237,.3)'},ticks:{maxTicksLimit:20,font:{size:9}},
+        title:{display:true,text:'Fecha exacta de débito',font:{size:10}}},
+        y:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)},
+          title:{display:true,text:'Importe ARS',font:{size:10}}}}}});
+
+    // CHART CH3: By acreedor horizontal bars
+    const acrMap={};
+    CH.allItems.forEach(c=>{acrMap[c.acreedor]=(acrMap[c.acreedor]||0)+c.importe;});
+    const acrArr=Object.entries(acrMap).sort((a,b)=>b[1]-a[1]);
+    const acrClr=['#2563eb','#dc2626','#059669','#d97706','#7c3aed','#0891b2','#ea580c','#16a34a'];
+    charts.cCH3=new Chart(document.getElementById('cCH3'),{type:'bar',data:{
+      labels:acrArr.map(e=>e[0]),
+      datasets:[{label:'Total pendiente',data:acrArr.map(e=>Math.round(e[1])),
+        backgroundColor:acrClr.slice(0,acrArr.length).map(c=>c+'88'),
+        borderColor:acrClr.slice(0,acrArr.length),borderWidth:1,borderRadius:3}]},
+      options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+        plugins:{tooltip:{...TT,callbacks:{label:c=>c.dataset.label+': '+fF(c.raw)}},legend:{display:false}},
+        scales:{x:{grid:{color:'rgba(226,230,237,.7)'},ticks:{callback:v=>fA(v)}},
+          y:{grid:{display:false},ticks:{font:{size:10}}}}}});
+
+    // ICBC table
+    const icbcSorted=[...CH.icbc].sort((a,b)=>{
+      const dA=parseFechaChq(a.fecha,a.semana),dB=parseFechaChq(b.fecha,b.semana);
+      return dA-dB;
+    });
+    const icbcTbody=document.querySelector('#tblChICBC tbody');icbcTbody.innerHTML='';
+    document.getElementById('chICBCsub').textContent=CH.icbc.length+' cheques · Total: '+fF(icbcT);
+    icbcSorted.forEach(c=>{
+      const tr=document.createElement('tr');
+      const isPast=parseFechaChq(c.fecha,c.semana)<today;
+      tr.innerHTML=`<td style="font-weight:600;${isPast?'color:var(--red)':''}">${c.fecha||'—'}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${c.numCheque||'—'}</td>
+        <td style="color:var(--t1);font-weight:500">${c.acreedor||'—'}</td>
+        <td>Sem ${fD(c.semana)}</td>
+        <td style="text-align:right;font-weight:600;color:var(--t1)">${fF(c.importe)}</td>`;
+      icbcTbody.appendChild(tr);
+    });
+    document.getElementById('chICBCfoot').textContent=fF(icbcT);
+
+    // BAPRO table
+    const baproSorted=[...CH.bapro].sort((a,b)=>{
+      const dA=parseFechaChq(a.fecha,a.semana),dB=parseFechaChq(b.fecha,b.semana);
+      return dA-dB;
+    });
+    const baproTbody=document.querySelector('#tblChBAPRO tbody');baproTbody.innerHTML='';
+    document.getElementById('chBAPROsub').textContent=CH.bapro.length+' cheques · Total: '+fF(baproT);
+    if(CH.bapro.length===0){
+      baproTbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:20px;">Sin cheques pendientes en Banco Provincia</td></tr>';
+    }
+    baproSorted.forEach(c=>{
+      const tr=document.createElement('tr');
+      const isPast=parseFechaChq(c.fecha,c.semana)<today;
+      tr.innerHTML=`<td style="font-weight:600;${isPast?'color:var(--red)':''}">${c.fecha||'—'}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:11px">${c.numCheque||'—'}</td>
+        <td style="color:var(--t1);font-weight:500">${c.acreedor||'—'}</td>
+        <td>Sem ${fD(c.semana)}</td>
+        <td style="text-align:right;font-weight:600;color:var(--t1)">${fF(c.importe)}</td>`;
+      baproTbody.appendChild(tr);
+    });
+    document.getElementById('chBAPROfoot').textContent=fF(baproT);
+
+    // Weekly summary table
+    const chWkTbody=document.querySelector('#tblChWeekly tbody');chWkTbody.innerHTML='';
+    const maxWk=Math.max(...CH.icbcWeekly,...CH.baproWeekly,1);
+    for(let i=0;i<n;i++){
+      const iw=CH.icbcWeekly[i]||0,bw=CH.baproWeekly[i]||0,tw=iw+bw;
+      if(tw===0)continue;
+      const bpct=((tw/grandT)*100).toFixed(1);
+      const bw2=((tw/maxWk)*100).toFixed(1);
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td style="font-weight:500">Sem ${fD(D.dates[i])}</td>
+        <td style="text-align:right;color:#2563eb;font-weight:600">${iw>0?fF(iw):'—'}</td>
+        <td style="text-align:right;color:#059669;font-weight:600">${bw>0?fF(bw):'—'}</td>
+        <td style="text-align:right;font-weight:700;color:var(--t1)">${fF(tw)}</td>
+        <td><div class="bar-bg"><div class="bar-fi" style="width:${bw2}%;background:linear-gradient(90deg,#2563eb,#059669)"></div></div></td>`;
+      chWkTbody.appendChild(tr);
+    }
+    document.getElementById('chWkICBC').textContent=fF(icbcT);
+    document.getElementById('chWkBAPRO').textContent=fF(baproT);
+    document.getElementById('chWkTot').textContent=fF(grandT);
+  }
+
   // ---- PAGOS PREVISTOS TAB ----
   if(D.ppCatByWeek){
     const ppCats=Object.entries(D.ppCatByWeek).map(([k,v])=>[k,v.reduce((a,b)=>a+b,0)]).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
@@ -1002,16 +1253,20 @@ function render(){
 
 // ===================== FILE HANDLER =====================
 async function processFile(ab){
+  const btn=document.getElementById('btnOD');
+  btn.classList.add('act');btn.style.pointerEvents='none';
   showLoading('Procesando CASHFLOW…');
   try{
     const wb=XLSX.read(ab,{type:'array',cellDates:true});
     D=parseWorkbook(wb);
     render();
-    setStatus('ok','Datos cargados · '+D.numWeeks+' semanas');
+    setStatus('ok','Datos actualizados · '+D.numWeeks+' semanas · '+new Date().toLocaleTimeString('es-AR'));
   }catch(e){
-    console.error(e);alert('Error: '+e.message);
+    console.error(e);alert('Error al procesar: '+e.message);
     setStatus('err','Error al procesar');
-  }finally{hideLoading();}
+  }finally{
+    hideLoading();btn.classList.remove('act');btn.style.pointerEvents='';
+  }
 }
 
 document.getElementById('fi').addEventListener('change',async function(e){
@@ -1020,45 +1275,6 @@ document.getElementById('fi').addEventListener('change',async function(e){
   await processFile(ab);
   e.target.value='';
 });
-
-// ===================== ONEDRIVE FETCH =====================
-function encodeShareUrl(url){
-  const b64=btoa(url).replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
-  return 'u!'+b64;
-}
-
-async function fetchOneDrive(){
-  const btn=document.getElementById('btnOD');
-  btn.classList.add('act');
-  setODStatus('loading','Descargando…');
-  showLoading('Conectando a OneDrive…');
-
-  try{
-    const token=encodeShareUrl(ONEDRIVE_SHARE_URL);
-    const apiUrl=`https://api.onedrive.com/v1.0/shares/${token}/root/content`;
-    let resp=await fetch(apiUrl,{redirect:'follow'}).catch(()=>null);
-
-    if(!resp||!resp.ok){
-      const dlUrl='https://onedrive.live.com/download?resid=B796724014EC33B5!109185';
-      resp=await fetch(dlUrl,{redirect:'follow'}).catch(()=>null);
-    }
-
-    if(!resp||!resp.ok) throw new Error('CORS');
-
-    const ab=await resp.arrayBuffer();
-    if(ab.byteLength<500)throw new Error('empty');
-    await processFile(ab);
-    setODStatus('ok','OneDrive \u2713');
-  }catch(e){
-    console.warn('OneDrive:',e.message);
-    hideLoading();
-    setODStatus('err','Seleccionar archivo');
-    setStatus('warn','Seleccioná el .xlsx actualizado');
-    document.getElementById('fi').click();
-  }finally{
-    btn.classList.remove('act');
-  }
-}
 
 // ===================== DRAG & DROP =====================
 document.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();
@@ -1083,10 +1299,6 @@ function setStatus(type,txt){
   st.textContent=txt;
   dot.style.background=type==='ok'?'var(--grn)':type==='err'?'var(--red)':'var(--amb)';
   dot.style.boxShadow=`0 0 6px ${type==='ok'?'var(--grn)':type==='err'?'var(--red)':'var(--amb)'}`;
-}
-function setODStatus(type,txt){
-  const el=document.getElementById('odStatus');
-  el.className='od-status '+type;el.textContent=txt;
 }
 
 // ===================== TABS =====================
@@ -1146,6 +1358,14 @@ document.querySelectorAll('.tab').forEach(tab=>{
       "Servicios (Gas)":[0.0, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 10036.73, 0.0, 0.0, 0.0, 0.0, 10036.73]
     },
     ppItems:[{"ci":0,"amount":82539.31,"desc":"2/3 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":1,"amount":1326015.76,"desc":"10/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":5,"amount":77652.04,"desc":"1/4 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":35057.42,"desc":"14/04 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":7,"amount":722998.08,"desc":"05/04 3 PACK","bank":"IN04/02 FXX/XX","cat":"Proveedores"},{"ci":8,"amount":652184.89,"desc":"25/04 ARTEPLAST","bank":"IN23/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":77652.0,"desc":"4/5 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":10,"amount":35057.42,"desc":"12/05 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":13,"amount":18166.66,"desc":"2/6 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":14,"amount":35057.42,"desc":"09/03 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":18,"amount":18166.66,"desc":"2/7 ARS JM VIS ","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":19,"amount":35057.42,"desc":"14/07 VISA ICBC","bank":"ICBC","cat":"Tarjetas ARS"},{"ci":0,"amount":12156.9,"desc":"2/3 USD JM VIS","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":1,"amount":220926.3,"desc":"10/03 USD ICBC VISA","bank":"ICBC","cat":"Tarjetas USD"},{"ci":0,"amount":118857.96,"desc":"2/3 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":652538.43,"desc":"09/04 SAIZ CAPUTO","bank":"IN10/02 F09/02","cat":"Proveedores"},{"ci":0,"amount":12127.5,"desc":"2/3 USD JM MC","bank":"SUPERVIELLE","cat":"Tarjetas USD"},{"ci":5,"amount":37555.55,"desc":"1/4 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":6,"amount":1774790.0,"desc":"11/04 ROLANPLAST","bank":"IN19/02 F19/02","cat":"Proveedores"},{"ci":9,"amount":37555.55,"desc":"4/5 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37555.55,"desc":"2/6 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37555.55,"desc":"2/7 ARS JM MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":2238.78,"desc":"2/3 VISA BAPRO","bank":"B PROVINCIA","cat":"Tarjetas ARS"},{"ci":5,"amount":37495.53,"desc":"1/4 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":9,"amount":37495.53,"desc":"4/5 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":13,"amount":37495.53,"desc":"2/6 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":18,"amount":37495.53,"desc":"2/7 ARS BQ MC","bank":"SUPERVIELLE","cat":"Tarjetas ARS"},{"ci":0,"amount":4454.1,"desc":"2/3 US VIS JM","bank":"B PROVINCIA","cat":"Tarjetas USD"},{"ci":0,"amount":693500.0,"desc":"21/02 MIGUEL CORRUGADO","bank":"IN15/01F15/01","cat":"Proveedores"},{"ci":7,"amount":700000.0,"desc":"18/04 EMBAL GROUP","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":8,"amount":1200000.0,"desc":"25/04 SAIZ CAPUTO","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":13,"amount":1500000.0,"desc":"30/05 NARDONE","bank":"PREVISIÓN","cat":"Proveedores"},{"ci":0,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":2,"amount":270820.26,"desc":"10/02 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":4,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":5,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":6,"amount":270820.26,"desc":"10/04 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":8,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":9,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":10,"amount":270820.26,"desc":"10/05 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":12,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":13,"amount":837203.83,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":14,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":16,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":17,"amount":906740.31,"desc":"ALQUILER","bank":"INMO FUENTES","cat":"Alquiler Vivienda"},{"ci":18,"amount":270820.26,"desc":"10/06 EXPENSAS","bank":"INMO FUENTES","cat":"Expensas"},{"ci":21,"amount":156541.4,"desc":"EDENOR","bank":"ELECTRICIDAD","cat":"Servicios (Electricidad)"},{"ci":0,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/03","cat":"Servicios (TV/Internet)"},{"ci":2,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":4,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":5,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/04","cat":"Servicios (TV/Internet)"},{"ci":6,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":8,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":9,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/05","cat":"Servicios (TV/Internet)"},{"ci":10,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":12,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":13,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/06","cat":"Servicios (TV/Internet)"},{"ci":14,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":16,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":17,"amount":42519.28,"desc":"CABLEVISIÓN","bank":"VTO. 01/07","cat":"Servicios (TV/Internet)"},{"ci":18,"amount":40202.0,"desc":"TSG ANDREA","bank":"MUNI. MORÓN","cat":"Tasas Municipales"},{"ci":21,"amount":10036.73,"desc":"NATURGY","bank":"GAS","cat":"Servicios (Gas)"},{"ci":1,"amount":661617.0,"desc":"10/03 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":6,"amount":678157.42,"desc":"10/04 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":10,"amount":695111.36,"desc":"10/05 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":14,"amount":712489.14,"desc":"10/06 VALENTINA","bank":"","cat":"Valentina (Personal)"},{"ci":19,"amount":730301.37,"desc":"10/07 VALENTINA","bank":"","cat":"Valentina (Personal)"}]
+,
+    cheques:{
+      icbc:[{"banco":"ICBC","ci":0,"importe":779164.63,"fecha":"28/02","numCheque":"EIC10475471","acreedor":"SAIZ CAPUTO","semana":"2026-03-02"},{"banco":"ICBC","ci":1,"importe":2321623.7,"fecha":"03/03","numCheque":"EIC10475465","acreedor":"LLAVANERES","semana":"2026-03-09"},{"banco":"ICBC","ci":2,"importe":551991.41,"fecha":"10/03","numCheque":"EIC10475456","acreedor":"NARDONE, SAN","semana":"2026-03-16"},{"banco":"ICBC","ci":3,"importe":452221.87,"fecha":"21/03","numCheque":"IC1308","acreedor":"ROLANPLAST","semana":"2026-03-23"},{"banco":"ICBC","ci":4,"importe":886326.51,"fecha":"28/03","numCheque":"EIC10475473","acreedor":"PELPAK","semana":"2026-03-30"},{"banco":"ICBC","ci":5,"importe":551991.41,"fecha":"31/03","numCheque":"EIC10475459","acreedor":"NARDONE, SAN","semana":"2026-04-06"},{"banco":"ICBC","ci":6,"importe":493917.16,"fecha":"11/04","numCheque":"IC1311","acreedor":"HERNAN DESCAR","semana":"2026-04-13"},{"banco":"ICBC","ci":8,"importe":465538.42,"fecha":"23/04","numCheque":"EIC10475467","acreedor":"NARDONE, DAV","semana":"2026-04-27"},{"banco":"ICBC","ci":9,"importe":465538.42,"fecha":"29/04","numCheque":"EIC10475468","acreedor":"NARDONE, DAV","semana":"2026-05-04"},{"banco":"ICBC","ci":10,"importe":465538.42,"fecha":"09/05","numCheque":"EIC10475470","acreedor":"NARDONE, DAV","semana":"2026-05-11"},{"banco":"ICBC","ci":12,"importe":499541.14,"fecha":"20/05","numCheque":"EIC10475474","acreedor":"NARDONE, DAV","semana":"2026-05-25"},{"banco":"ICBC","ci":13,"importe":499541.14,"fecha":"30/05","numCheque":"EIC10475476","acreedor":"NARDONE, DAV","semana":"2026-06-01"},{"banco":"ICBC","ci":0,"importe":313172.2,"fecha":"21/02","numCheque":"IC1302","acreedor":"HERNÁN","semana":"2026-03-02"},{"banco":"ICBC","ci":3,"importe":551991.41,"fecha":"17/03","numCheque":"EIC10475457","acreedor":"NARDONE, SAN","semana":"2026-03-23"},{"banco":"ICBC","ci":4,"importe":452221.87,"fecha":"26/03","numCheque":"IC1309","acreedor":"ROLANPLAST","semana":"2026-03-30"},{"banco":"ICBC","ci":5,"importe":452221.87,"fecha":"31/03","numCheque":"IC1310","acreedor":"ROLANPLAST","semana":"2026-04-06"},{"banco":"ICBC","ci":10,"importe":465538.42,"fecha":"05/05","numCheque":"EIC10475469","acreedor":"NARDONE, DAV","semana":"2026-05-11"},{"banco":"ICBC","ci":13,"importe":499541.14,"fecha":"27/05","numCheque":"EIC10475475","acreedor":"NARDONE, DAV","semana":"2026-06-01"},{"banco":"ICBC","ci":0,"importe":714329.55,"fecha":"21/02","numCheque":"EIC10475463","acreedor":"EMBAL GROUP","semana":"2026-03-02"},{"banco":"ICBC","ci":3,"importe":452221.87,"fecha":"17/03","numCheque":"IC1307","acreedor":"ROLANPLAST","semana":"2026-03-23"},{"banco":"ICBC","ci":4,"importe":551991.41,"fecha":"24/03","numCheque":"EIC10475458","acreedor":"NARDONE, SAN","semana":"2026-03-30"},{"banco":"ICBC","ci":4,"importe":2495865.8,"fecha":"21/03","numCheque":"EIC10475472","acreedor":"LLAVANERES","semana":"2026-03-30"}],
+      bapro:[],
+      icbcWeekly:[1806666.38,2321623.7,551991.41,1456435.15,4386405.59,1004213.28,493917.16,0,465538.42,465538.42,931076.84,0,499541.14,999082.28,0,0,0,0,0,0,0,0],
+      baproWeekly:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      get allItems(){return[...this.icbc,...this.bapro];}
+    }
   };
   // Compute scenarios from embedded data
   for(let si=0;si<SCENARIO_PCTS.length;si++){
@@ -1157,9 +1377,7 @@ document.querySelectorAll('.tab').forEach(tab=>{
     D.scenarios[lbl]=proj;
   }
   render();
-  setStatus('ok','Datos embebidos cargados');
-  // Then attempt OneDrive refresh
-  setTimeout(()=>fetchOneDrive(),1500);
+  setStatus('ok','Datos embebidos · Pulsar Refrescar para actualizar con último .xlsx');
 })();
 </script>
 </body>
